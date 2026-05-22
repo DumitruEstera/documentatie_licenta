@@ -1,0 +1,32 @@
+# LaTeX auxiliary / build artifacts
+*.aux
+*.lof
+*.log
+*.lot
+*.toc
+*.out
+*.bbl
+*.bcf
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.run.xml
+*-blx.bib
+*.nav
+*.snm
+*.vrb
+*.idx
+*.ind
+*.ilg
+*.glo
+*.gls
+*.acn
+*.acr
+*.alg
+*.xdy
+
+# Editor / OS
+*~
+.*.sw[a-p]
+.DS_Store

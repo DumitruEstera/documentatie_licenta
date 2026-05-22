@@ -1,0 +1,71 @@
+CUM SE ADAUGĂ SURSE BIBLIOGRAFICE
+===================================
+
+Editează fișierul `bibliography.bib` din acest folder.
+
+Cele două intrări existente (`placeholder_book` și `placeholder_article`) sunt
+necesare pentru ca BibTeX să nu eșueze cu "empty bibliography" — ele NU apar
+în bibliografia tipărită datorită opțiunii `options = {skipbib=true}`.
+
+Poți să le păstrezi acolo sau să le ștergi după ce adaugi propriile surse.
+
+
+EXEMPLE DE INTRĂRI
+===================
+
+Pentru o CARTE:
+
+    @BOOK{cheie_unica_a_cartii,
+        title     = "Titlul Cărții",
+        author    = "Nume, Prenume",
+        publisher = "Editura",
+        year      = "2024"
+    }
+
+Pentru un ARTICOL științific:
+
+    @ARTICLE{cheie_unica_a_articolului,
+        title   = "Titlul Articolului",
+        author  = "Nume1, Prenume1 and Nume2, Prenume2",
+        doi     = "10.xxxx/xxxxx",
+        journal = "Numele Jurnalului",
+        volume  = "1",
+        year    = "2024",
+        month   = "06",
+        pages   = "1-10"
+    }
+
+
+CITAREA ÎN CAPITOLE
+====================
+
+În textul lucrării, citează o sursă cu \cite{cheie_unica}. Exemplu:
+
+    Așa cum demonstrează \cite{cheie_unica_a_cartii}, ...
+
+
+SURSE CITATE O SINGURĂ DATĂ (în notă de subsol, fără să apară în bibliografie)
+==============================================================================
+
+Adaugă opțiunea `options = {skipbib=true}` la intrare. Apoi citează-le în text cu:
+
+    Detalii suplimentare\footnote{\fullcite{cheie_unica}}.
+
+
+ORDONAREA ÎN BIBLIOGRAFIE
+==========================
+
+Implicit, intrările sunt ordonate alfabetic după autor. Dacă vrei să forțezi o
+anumită ordine, folosește \noopsort{NN} în câmpul `author`, unde NN este poziția:
+
+    author = "\noopsort{01}Nume, Prenume"
+
+
+GENERAREA AUTOMATĂ DE CITĂRI
+=============================
+
+Folosește Google Scholar (https://scholar.google.com/):
+1. Caută articolul/cartea
+2. Apasă pe iconița de citare (")
+3. Selectează "BibTeX"
+4. Copiază blocul în bibliography.bib
