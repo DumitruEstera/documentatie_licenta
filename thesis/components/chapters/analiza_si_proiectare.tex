@@ -117,11 +117,11 @@ Figura~\ref{fig:usecase-detaliat} prezintă diagrama detaliată a cazurilor de u
 \clearpage
 
 \begin{description}
-    \item[UC1 -- Autentificare în sistem.] \textit{Actori:} Administrator, Operator. \textit{Pre-condiție:} utilizatorul are un cont creat. \textit{Scenariu:} utilizatorul introduce numele de utilizator și parola în pagina de login; backend-ul verifică hash-ul parolei, generează un token JWT semnat și îl returnează clientului, care îl stochează local și îl atașează tuturor cererilor ulterioare. \textit{Post-condiție:} sesiunea este activă, iar UI-ul afișează doar componentele permise rolului utilizatorului. \textit{Acoperă:} parte din NF3 (autentificare JWT).
+    \item[UC1 -- Autentificare în sistem.] \textit{Actori:} Administrator, Operator. \textit{Pre-condiție:} utilizatorul are un cont creat. \textit{Scenariu:} Utilizatorul introduce numele de utilizator și parola în pagina de login; backend-ul verifică hash-ul parolei, generează un token JWT semnat și îl returnează clientului, care îl stochează local și îl atașează tuturor cererilor ulterioare. \textit{Post-condiție:} sesiunea este activă, iar UI-ul afișează doar componentele permise rolului utilizatorului. \textit{Acoperă:} parte din NF3 (autentificare JWT).
 
-    \item[UC2 -- Vizualizare fluxuri live multi-cameră.] \textit{Actori:} Administrator, Operator. \textit{Pre-condiție:} cel puțin o cameră este pornită. \textit{Scenariu:} utilizatorul deschide pagina principală; clientul stabilește o conexiune WebSocket cu backend-ul; backend-ul difuzează cadrele procesate (cu detecțiile suprapuse) către toți clienții conectați, la o rată țintă de aproximativ 30~FPS. Utilizatorul poate selecta camera afișată în prim-plan dintr-un grid. \textit{Post-condiție:} fluxurile sunt afișate în timp real cu adnotările vizuale ale detectoarelor active. \textit{Acoperă:} F1 (și indirect F2--F6 pentru adnotările suprapuse).
+    \item[UC2 -- Vizualizare fluxuri live multi-cameră.] \textit{Actori:} Administrator, Operator. \textit{Pre-condiție:} cel puțin o cameră este pornită. \textit{Scenariu:} Utilizatorul deschide pagina principală; clientul stabilește o conexiune WebSocket cu backend-ul; backend-ul difuzează cadrele procesate (cu detecțiile suprapuse) către toți clienții conectați, la o rată țintă de aproximativ 30~FPS. Utilizatorul poate selecta camera afișată în prim-plan dintr-un grid. \textit{Post-condiție:} fluxurile sunt afișate în timp real cu adnotările vizuale ale detectoarelor active. \textit{Acoperă:} F1 (și indirect F2--F6 pentru adnotările suprapuse).
 
-    \item[UC3 -- Schimbare parolă cont propriu.] \textit{Actori:} Administrator, Operator. \textit{Scenariu:} utilizatorul autentificat introduce noua parolă; backend-ul o validează, o hash-uiește și o salvează în baza de date prin endpoint-ul \texttt{/api/users/me/password}. \textit{Post-condiție:} la următoarea autentificare se folosește noua parolă. \textit{Acoperă:} parte din NF3.
+    \item[UC3 -- Schimbare parolă cont propriu.] \textit{Actori:} Administrator, Operator. \textit{Scenariu:} Utilizatorul autentificat introduce noua parolă; backend-ul o validează, o hash-uiește și o salvează în baza de date prin endpoint-ul \texttt{/api/users/me/password}. \textit{Post-condiție:} la următoarea autentificare se folosește noua parolă. \textit{Acoperă:} parte din NF3.
 
     \item[UC4 -- Înregistrare persoană nouă.]  \textit{Actor:} Administrator. \textit{Scenariu:} Utilizând un singur formular, administratorul introduce metadatele persoanei (nume, \texttt{employee\_id}, departament, zone autorizate) și încarcă una sau mai multe imagini faciale. La trimiterea datelor, interfața orchestrează transparent două apeluri REST succesive. Primul apel, \texttt{/api/persons/
     	register}, stochează metadatele și returnează noul \texttt{person\_id}. Al doilea apel, \texttt{/api/persons/\{person\_id\}/faces}, declanșează la nivelul backend-ului extragerea embedding-ului InsightFace de 512 dimensiuni pentru fiecare imagine, salvarea acestuia în tabela \texttt{face\_embeddings} și reconstrucția automată a indexului FAISS. \textit{Excepție:} Dacă într-o imagine nu este detectată \emph{exact} o singură față (situație care generează un embedding de tip \texttt{None}), imaginea respectivă este ignorată și semnalată în lista de erori, fără a bloca procesarea celorlalte fișiere. \textit{Post-condiție:} Imediat după finalizarea procesului, persoana poate fi identificată în fluxurile video live. \textit{Acoperă:} F2, F8.
@@ -152,7 +152,52 @@ După stabilirea cerințelor (\S\ref{sec:analiza_cerinte}) și a cazurilor de ut
 
 Sistemul este construit ca o aplicație web cu \textbf{trei straturi logice}: prezentare (clientul React), aplicație (backend-ul FastAPI cu pipeline-ul AI integrat) și persistență (baza de date PostgreSQL plus indexul FAISS reconstruit la pornire). Aceste straturi sunt utilizate de \textbf{cinci tipuri de actori tehnici}: utilizatorii umani prin browser, camerele video ca surse externe de date, modelele AI încărcate în memorie ca dependențe în proces, baza de date ca sistem suport și GPU-ul ca resursă de calcul. Alegerea unei arhitecturi monolitice pentru \linebreak backend, în care toate detectoarele rulează în același proces și partajează memoria GPU, este justificată în \S\ref{subsec:justificare_paralel}.
 
-\textit{[Diagramă: \textbf{diagramă bloc de ansamblu} care arată cele trei straturi pe orizontală (Prezentare~|~Aplicație~|~Persistență), cu săgeți de comunicare etichetate pe protocol: HTTPS/REST și WebSocket între client și backend, RTSP/HTTP/MJPEG între camere și backend, SQL prin driver \texttt{psycopg2} între backend și PostgreSQL, apeluri în proces între backend și modelele AI încărcate pe GPU. Plasată la începutul Secțiunii~\ref{sec:arhitectura_generala}, înainte de \S\ref{subsec:client_server}.]}
+\begin{figure}[htbp]
+	\centering
+	\resizebox{\textwidth}{!}{%
+	\begin{tikzpicture}[
+		font=\small,
+		box/.style={draw, rounded corners, align=center, thick,
+		            minimum height=1.2cm, minimum width=2.9cm, fill=blue!5},
+		aibox/.style={box, fill=orange!10},
+		dbbox/.style={box, fill=green!8},
+		cambox/.style={box, fill=gray!8},
+		lbl/.style={font=\scriptsize, fill=white, inner sep=2pt},
+		arr/.style={-{Stealth[length=2.5mm]}, thick},
+		biarr/.style={{Stealth[length=2.5mm]}-{Stealth[length=2.5mm]}, thick},
+		lane/.style={draw, dashed, rounded corners, inner sep=16pt, gray}
+	]
+		% --- Noduri ---
+		\node[box]    (client) at (0,1.5)    {Client web\\[-2pt]\scriptsize (React 19, SPA)};
+		\node[cambox] (camere) at (0,-1.6)   {Camere IP\\[-2pt]\scriptsize (webcam / RTSP)};
+
+		\node[box, minimum height=1.5cm]   (backend) at (5.6,1.5)
+		      {Backend FastAPI\\[-2pt]\scriptsize \texttt{app.py} (Uvicorn:8000)};
+		\node[aibox, minimum height=1.5cm] (ai) at (5.6,-1.6)
+		      {Modele AI pe GPU\\[-2pt]\scriptsize InsightFace, YOLOv8,\\[-2pt]\scriptsize EasyOCR, SlowFast, FER};
+
+		\node[dbbox]  (db)    at (11.2,1.5)   {PostgreSQL\\[-2pt]\scriptsize (\texttt{psycopg2})};
+		\node[dbbox]  (faiss) at (11.2,-1.6)  {Index FAISS\\[-2pt]\scriptsize (în memorie, 512-d)};
+
+		% --- Săgeți etichetate ---
+		\draw[biarr] (client) -- node[lbl, above]{HTTPS / REST}
+		                         node[lbl, below]{WebSocket} (backend);
+		\draw[arr]   (camere) -- node[lbl, sloped, above]{RTSP / HTTP / MJPEG} (backend.south west);
+		\draw[biarr] (backend) -- node[lbl, right]{apeluri în proces} (ai);
+		\draw[biarr] (backend) -- node[lbl, above]{SQL (\texttt{psycopg2})} (db);
+		\draw[arr, dashed] (db) -- node[lbl, right]{reconstruit la pornire} (faiss);
+
+		% --- Cadre de strat (în fundal) ---
+		\begin{scope}[on background layer]
+			\node[lane, fit=(client)(camere), label={[font=\bfseries]above:Prezentare}] {};
+			\node[lane, fit=(backend)(ai),    label={[font=\bfseries]above:Aplicație}] {};
+			\node[lane, fit=(db)(faiss),      label={[font=\bfseries]above:Persistență}] {};
+		\end{scope}
+	\end{tikzpicture}%
+	}
+	\caption{Diagramă bloc de ansamblu a sistemului, organizată pe cele trei straturi logice (Prezentare, Aplicație, Persistență) și protocoalele de comunicare dintre componente: HTTPS/REST și WebSocket între client și backend, RTSP/HTTP/MJPEG pentru fluxurile camerelor, apeluri în proces către modelele AI de pe GPU și acces SQL la PostgreSQL prin driver-ul \texttt{psycopg2}. Indexul FAISS este menținut în memoria backend-ului și reconstruit din PostgreSQL la pornire.}
+	\label{fig:arhitectura_ansamblu}
+\end{figure}
 
 \subsection{Modelul client-server}
 \label{subsec:client_server}
@@ -161,15 +206,15 @@ Sistemul urmează un model client-server clasic, cu o singură instanță a serv
 
 \subsubsection{Clientul}
 
-Frontend-ul este o aplicație \textbf{React 19} compilată cu Create React App și stilizată cu Tailwind, livrabilă ca artefact static. Este o aplicație de tip \emph{single-page}, organizată pe ecrane comutate printr-o stare internă (\texttt{activeTab}), fără un router dedicat: \texttt{CameraGrid}, \texttt{PersonManagement}, \texttt{PlateManagement}, \texttt{ZoneManagement}, \texttt{CameraManagement}, \texttt{UserManagement}, \texttt{AlarmManagement}, \texttt{Logs}, \texttt{Statistics}, \texttt{IntelligenceSettings}, \texttt{RecentActivity}. Clientul nu execută niciun cod AI -- rolul său este de a afișa cadrele primite prin WebSocket, de a colecta input-ul utilizatorului și de a-l transmite ca apeluri REST.
+Frontend-ul este o aplicație \textbf{React 19} compilată cu Create React App și stilizată cu Tailwind, livrabilă ca artefact static. Este o aplicație de tip \emph{single-page}, organizată pe ecrane comutate printr-o stare internă (\texttt{activeTab}), fără un router dedicat: \texttt{CameraGrid}, \texttt{PersonManagement}, \texttt{PlateManagement}, \texttt{ZoneManagement}, \texttt{CameraManagement}, \texttt{UserManagement}, \texttt{AlarmManagement}, \texttt{Logs}, \texttt{Statistics}, \texttt{IntelligenceSettings}, \texttt{RecentActivity}. Clientul nu execută niciun cod AI, rolul său este de a afișa cadrele primite prin WebSocket, de a colecta input-ul utilizatorului și de a-l transmite ca apeluri REST.
 
 \subsubsection{Serverul}
 
-Backend-ul este o aplicație \textbf{FastAPI} pornită pe portul 8000 din \texttt{app.py}, încărcat ca o singură instanță Uvicorn (fără reload, pentru a evita dubla inițializare a modelelor pe GPU). Endpoint-urile sunt protejate prin token JWT și verificări de rol (dependențele \texttt{require\_admin} / \texttt{get\_current\_user}), aplicate înainte de invocarea handler-ului: operațiile administrative (controlul camerelor, gestiunea entităților, comutatoarele AI) necesită rolul de administrator, iar endpoint-urile operaționale (starea sistemului, listarea camerelor, jurnale) necesită doar autentificare. Canalul WebSocket este, la rândul lui, autentificat prin token JWT transmis ca parametru de interogare -- aspect detaliat în \S\ref{sec:rbac}. Pe lângă deservirea cererilor HTTP, serverul găzduiește pipeline-ul AI ca un set de fire de execuție de fundal, descrise în \S\ref{sec:pipeline_multithread}.
+Backend-ul este o aplicație \textbf{FastAPI} pornită pe portul 8000 din \texttt{app.py}, încărcat ca o singură instanță Uvicorn (fără reload, pentru a evita dubla inițializare a modelelor pe GPU). Endpoint-urile sunt protejate prin token JWT și verificări de rol (dependențele \texttt{require\_admin} / \texttt{get\_current\_user}), aplicate înainte de invocarea handler-ului: operațiile administrative (controlul camerelor, gestiunea entităților, comutatoarele AI) necesită rolul de administrator, iar endpoint-urile operaționale (starea sistemului, listarea camerelor, jurnale) necesită doar autentificare. Canalul WebSocket este, la rândul lui, autentificat prin token JWT transmis ca parametru de interogare (aspect detaliat în \S\ref{sec:rbac}). Pe lângă deservirea cererilor HTTP, serverul găzduiește pipeline-ul AI ca un set de fire de execuție de fundal, descrise în \S\ref{sec:pipeline_multithread}.
 
 \subsubsection{Sursele video}
 
-Camerele sunt actori externi care nu inițiază niciodată conexiuni către server; serverul este cel care le deschide fluxurile prin OpenCV -- camera locală a stației (webcam USB, \texttt{cv2.VideoCapture(0)}) și camere IP adăugate prin URL de flux (RTSP/HTTP/MJPEG). Eșecul unei camere -- timeout, deconectare -- nu propagă o eroare în lanț, ci doar marchează camera ca inactivă și permite repornirea ulterioară.
+Camerele video funcționează ca actori externi care nu inițiază niciodată \linebreak conexiuni către server. Serverul este responsabil cu deschiderea fluxurilor video prin intermediul bibliotecii OpenCV. Aceste surse pot include camera locală a stației și camere IP integrate prin URL-uri de streaming (RTSP/HTTP/MJPEG). Eșecul unei camere, cum ar fi un \emph{timeout} sau o deconectare neprevăzută, nu propagă o eroare în cascadă, ci doar marchează camera ca inactivă și permite repornirea ulterioară.
 
 \subsubsection{Persistența}
 
@@ -181,7 +226,7 @@ Stratul de persistență combină \textbf{PostgreSQL} utilizat pentru stocarea p
 La nivel intern, backend-ul este descompus în următoarele componente logice. Fiecare componentă este un modul Python sau un grup de fire de execuție cu responsabilitate clară, cuplate prin cozi \texttt{queue.Queue} sau prin apeluri directe.
 
 \begin{description}
-    \item[Modul de captură.] Implementat în \texttt{app.py} sub forma unui fir de execuție per cameră activă, care deschide fluxul prin OpenCV, citește cadrele în mod sincron și le distribuie -- prin clonare \texttt{frame.copy()} -- în cozile de procesare ale fiecărui detector activ și în coada \texttt{raw\_frame\_queue} folosită ca fallback pentru fuziune.
+    \item[Modul de captură.] Implementat în \texttt{app.py} sub forma unui fir de execuție per cameră activă, care deschide fluxul prin OpenCV, citește cadrele în mod sincron și le distribuie (prin clonare \texttt{frame.copy()}) în cozile de procesare ale fiecărui detector activ și în coada \texttt{raw\_frame\_queue} folosită ca fallback pentru fuziune.
 
     \item[Modul AI.] Containerul pentru toate detectoarele specializate, încărcate o singură dată la pornire și partajate între fluxurile camerelor. Conține următoarele sub-module independente, fiecare cu propriul fir de execuție și propria pereche de cozi (\texttt{*\_processing\_queue} de intrare, \texttt{*\_results\_queue} de ieșire):
     \begin{itemize}
@@ -189,21 +234,21 @@ La nivel intern, backend-ul este descompus în următoarele componente logice. F
         \item \texttt{license\_plate\_recognition\_system} -- detecție și OCR pe plăcuțe (\textbf{YOLOv8} pentru localizare + \textbf{EasyOCR} pentru text).
         \item \texttt{fire\_detection\_system} -- detector foc/fum cu \textbf{confirmare temporală} pe fereastră multi-cadru, pentru reducerea fals pozitivelor.
         \item \texttt{weapon\_detection\_system} -- detector \textbf{YOLOv8m} fine-tuned pe clasa unică \texttt{weapon}, antrenat pe Zenodo \emph{Dangerous Items} + Roboflow \emph{SOHAS}.
-        \item \texttt{har\_system} -- recunoaștere acțiuni umane folosind \textbf{SlowFast-R50} (clipuri de 64 cadre, două căi slow/fast), care clasifică fiecare clip în acțiunile \texttt{normal}, \texttt{fight} și \texttt{vandalism}.
+        \item \texttt{har\_system} -- recunoaștere acțiuni umane folosind \textbf{SlowFast-R50}, care clasifică fiecare clip în acțiunile \texttt{normal}, \texttt{fight} și \texttt{vandalism}.
     \end{itemize}
 
     \item[Modul de fuziune.] Firul \emph{result merger} colectează rezultatele parțiale din toate cozile de ieșire ale detectoarelor active, le asociază pe baza câmpului \texttt{frame\_id} și produce un cadru final adnotat (cu bounding box-uri, etichete, scoruri de confidență), plus un set agregat de detecții. Tot aici se aplică \textbf{logica de declanșare a alarmelor} (verificarea zonelor restricționate, deduplicarea pe cooldown) și \textbf{politica de jurnalizare} (un singur log per (cameră, tip, subiect) într-o fereastră scurtă).
 
     \item[Modul de control al accesului.] Cache-urile \texttt{\_person\_zones\_cache} și \linebreak\texttt{\_camera\_zone\_cache} și logica asociată din \texttt{app.py} verifică, pentru fiecare \emph{persoană} identificată, dacă aceasta are dreptul de acces în zona asociată camerei (comparând zona camerei cu lista \texttt{authorized\_zones} a persoanei). Cache-urile sunt reîmprospătate periodic (TTL) și forțat la modificarea entităților relevante. Plăcuțele nu participă la acest mecanism, autorizarea lor fiind globală (\S\ref{subsec:cerinte_functionale}).
 
-    \item[API REST.] Stratul de controlere FastAPI definit în \texttt{app.py}, organizat pe domenii: \texttt{/api/login}, \texttt{/api/persons}, \texttt{/api/plates}, \texttt{/api/zones}, \linebreak\texttt{/api/cameras-db}, \texttt{/api/users}, \texttt{/api/logs}, \texttt{/api/alarms}, \texttt{/api/statistics}, plus endpoint-urile \texttt{toggle} pentru fiecare modul AI. Fiecare controler validează token-ul JWT, aplică verificarea de rol și deleagă efectiv către modulele de business sau către \texttt{database\_manager.py}.
+    \item[API REST.] Stratul de controlere FastAPI definit în \texttt{app.py}, organizat pe domenii: \texttt{/api/login}, \texttt{/api/persons}, \texttt{/api/plates}, \texttt{/api/zones}, \linebreak\texttt{/api/cameras-db}, \texttt{/api/users}, \texttt{/api/logs}, \texttt{/api/alarms}, \linebreak \texttt{/api/statistics}, plus endpoint-urile \texttt{toggle} pentru fiecare modul AI. Fiecare controler validează token-ul JWT, aplică verificarea de rol și deleagă efectiv către modulele de business sau către \texttt{database\_manager.py}.
 
     \item[Gestiunea WebSocket.] Endpoint-ul \texttt{/ws} autentifică clientul (token JWT ca parametru de interogare) și îi alocă o \textbf{coadă proprie} (\texttt{queue.Queue}), înregistrată în dicționarul \texttt{client\_queues}; modulul de fuziune nu publică într-o coadă partajată, ci difuzează fiecare cadru procesat către coada fiecărui client prin metoda \texttt{\_broadcast\_frame} (politică \emph{drop-oldest} per client, astfel încât un client lent să-și piardă doar propriile cadre vechi). Mesajele difuzate (câmpul \texttt{type}: \texttt{video\_frame}) conțin cadrul codificat (JPEG la calitate 75, redimensionat la maxim 800~px lățime, Base64), rezultatele detectoarelor pe câmpuri separate (\texttt{face\_results}, \texttt{plate\_results}, etc.) și starea modulelor (flag-urile \texttt{*\_enabled}). Comunicarea este \emph{strict unidirecțională} (server$\to$client): handler-ul doar trimite cadre, fără a citi mesaje de la client. Alarmele nu sunt transmise prin acest canal, ci preluate separat prin REST (\S\ref{sec:proiectare_websocket}).
 
-    \item[Layer de persistență.] Modulul \texttt{database\_manager.py} centralizează toate accesele la PostgreSQL printr-o conexiune \texttt{psycopg2} persistentă (cu \texttt{RealDictCursor}), oferind operații CRUD și interogări parametrizate pentru toate entitățile. Indexul FAISS, deși tehnic în memoria procesului, este considerat parte a acestui layer pentru că este reconstruit din DB. Datele binare sunt păstrate tot în baza de date: embedding-urile faciale ca \texttt{BYTEA} în \texttt{face\_embeddings}, iar capturile de alarmă (snapshot-urile) ca șiruri Base64 în coloana \texttt{snapshot} a tabelei \texttt{alarms}; sistemul nu expune un serviciu de fișiere statice.
+    \item[Layer de persistență.] Modulul \texttt{database\_manager.py} centralizează toate \linebreak accesele la PostgreSQL printr-o conexiune \texttt{psycopg2} persistentă \linebreak (cu \texttt{RealDictCursor}), oferind operații CRUD și interogări parametrizate pentru toate entitățile. Indexul FAISS, deși tehnic în memoria procesului, este considerat parte a acestui layer pentru că este reconstruit din DB. Datele binare sunt păstrate tot în baza de date: embedding-urile faciale ca \texttt{BYTEA} în \texttt{face\_embeddings}, iar capturile de alarmă (snapshot-urile) ca șiruri Base64 în coloana \texttt{snapshot} a tabelei \texttt{alarms}. Sistemul nu expune un serviciu de fișiere statice.
 \end{description}
 
-Cuplajul între componente este \textbf{slab}: fiecare detector poate fi activat/dezactivat independent (vezi UC8) fără a afecta restul, iar adăugarea unui nou detector se reduce la implementarea aceleiași interfețe (\emph{intrare:} cadru, \emph{ieșire:} listă de detecții) și conectarea unui nou fir cu cozile sale.
+Cuplajul între componente este slab: fiecare detector poate fi activat/dezactivat independent (vezi UC8) fără a afecta restul, iar adăugarea unui nou detector se reduce la implementarea aceleiași interfețe (\emph{intrare:} cadru, \emph{ieșire:} listă de detecții) și conectarea unui nou fir cu cozile sale.
 
 \textit{[Diagramă: \textbf{diagrama de componente UML} cu Modul Captură pe stânga, Modul AI ca \emph{component} compus cu cele cinci sub-module nested înăuntru, Modul Fuziune ca hub central, iar pe dreapta API REST + Gestiune WebSocket conectate la Layer Persistență (PostgreSQL + FAISS). Folosiți interfețe \texttt{lollipop} (cercuri) pentru a marca contractele între componente, în special cele oferite de Modul AI către Modul Fuziune (interfața \emph{Detector}). Plasată în \S\ref{subsec:diagrama_componente}.]}
 
