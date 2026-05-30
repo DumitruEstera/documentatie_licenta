@@ -1,0 +1,73 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+
+actor "Operator" as OP
+actor "Administrator" as AD
+
+rectangle "Sistem de Supraveghere Inteligentă" {
+
+  ' --- Autentificare ---
+  usecase "UC1 – Autentificare\nîn sistem" as UC1
+
+  ' --- Cazuri partajate ---
+  usecase "UC2 – Vizualizare fluxuri\nlive multi-cameră" as UC2
+  usecase "UC3 – Schimbare parolă\ncont propriu" as UC3
+  usecase "UC10 – Monitorizare\nalarme" as UC10
+  usecase "UC11 – Rezolvare\nalarmă" as UC11
+  usecase "UC12a – Consultare\njurnale" as UC12a
+
+  ' --- Cazuri doar Administrator ---
+  package "Administrare (doar Administrator)" {
+    usecase "UC4 – Înregistrare\npersoană nouă" as UC4
+    usecase "UC5 – Gestiune zone" as UC5
+    usecase "UC6 – Gestiune plăcuțe" as UC6
+    usecase "UC7 – Adăugare/eliminare\ncameră" as UC7
+    usecase "UC8 – Configurare module\nAI la runtime" as UC8
+    usecase "UC9 – Gestiune\nutilizatori" as UC9
+    usecase "UC12b – Vizualizare\nstatistici și dashboard" as UC12b
+  }
+}
+
+' === Operator – cazuri partajate ===
+OP --> UC2
+OP --> UC3
+OP --> UC10
+OP --> UC11
+OP --> UC12a
+
+' === Administrator – cazuri partajate ===
+AD --> UC2
+AD --> UC3
+AD --> UC10
+AD --> UC11
+AD --> UC12a
+
+' === Administrator – cazuri exclusive ===
+AD --> UC4
+AD --> UC5
+AD --> UC6
+AD --> UC7
+AD --> UC8
+AD --> UC9
+AD --> UC12b
+
+' === Relații <<include>> – autentificare necesară ===
+UC2 ..> UC1 : <<include>>
+UC3 ..> UC1 : <<include>>
+UC4 ..> UC1 : <<include>>
+UC5 ..> UC1 : <<include>>
+UC6 ..> UC1 : <<include>>
+UC7 ..> UC1 : <<include>>
+UC8 ..> UC1 : <<include>>
+UC9 ..> UC1 : <<include>>
+UC10 ..> UC1 : <<include>>
+UC11 ..> UC1 : <<include>>
+UC12a ..> UC1 : <<include>>
+UC12b ..> UC1 : <<include>>
+
+' === Relație <<extend>> ===
+UC11 ..> UC10 : <<extend>>
+
+@enduml
