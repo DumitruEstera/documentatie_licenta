@@ -1,0 +1,69 @@
+@startuml componente
+' Diagrama de componente UML - sistemul de supraveghere inteligent (S4.3.2)
+
+skinparam componentStyle uml2
+skinparam shadowing false
+skinparam backgroundColor transparent
+skinparam defaultFontName Serif
+skinparam defaultFontSize 13
+skinparam ArrowColor #555555
+skinparam InterfaceBackgroundColor #FFFFFF
+skinparam InterfaceBorderColor #333333
+
+skinparam component {
+  BorderColor #333333
+  BackgroundColor #EAF1FB
+  FontColor #111111
+}
+skinparam package {
+  BorderColor #777777
+  FontStyle bold
+}
+skinparam database {
+  BorderColor #2E7D32
+  BackgroundColor #E8F5E9
+}
+
+' ===== Componente =====
+[Modul Captură] as Captura #E0E0E0
+
+package "Modul AI" as AI #FFF3E0 {
+  [facial_recognition_system\n<size:10>InsightFace + FER</size>] as Face #FFFFFF
+  [license_plate_recognition_system\n<size:10>YOLOv8 + EasyOCR</size>] as Plate #FFFFFF
+  [fire_detection_system\n<size:10>confirmare temporală</size>] as Fire #FFFFFF
+  [weapon_detection_system\n<size:10>YOLOv8m</size>] as Weapon #FFFFFF
+  [har_system\n<size:10>SlowFast-R50</size>] as HAR #FFFFFF
+}
+
+[Modul Fuziune\n<size:10>result merger + logică alarme</size>] as Fuziune #D7E9FF
+
+package "Acces extern" as Acces #F3E5F5 {
+  [API REST] as REST #FFFFFF
+  [Gestiune WebSocket] as WS #FFFFFF
+}
+
+package "Layer Persistență" as Persist #E8F5E9 {
+  database "PostgreSQL" as PG
+  [Index FAISS\n<size:10>512-d, în memorie</size>] as FAISS #FFFFFF
+}
+
+' ===== Interfețe lollipop (contracte) =====
+() "Cadru" as ICadru
+() "Detector" as IDetector
+
+' Modul Captură oferă cadre, consumate de Modul AI
+Captura - ICadru
+ICadru )-- AI
+
+' Modul AI oferă interfața Detector către Modul Fuziune
+AI - IDetector
+IDetector )-- Fuziune
+
+' ===== Legături funcționale =====
+Face ..> FAISS : căutare\nembeddings
+Fuziune ..> WS : cadre adnotate
+Fuziune ..> PG : alarme / jurnale
+REST ..> PG : CRUD\n(psycopg2)
+PG ..> FAISS : reconstruit\nla pornire
+
+@enduml

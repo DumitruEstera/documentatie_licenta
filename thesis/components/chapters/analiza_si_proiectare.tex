@@ -64,7 +64,7 @@ Figura~\ref{fig:usecase} sintetizează cele 10 cerințe funcționale sub forma u
 Cerințele nefuncționale stabilesc atributele de calitate sub care vor opera funcționalitățile sistemului. Acestea sunt marcate prin identificatori de forma \texttt{NF\textit{x}} (paralel cu \texttt{F\textit{x}} din \S\ref{subsec:cerinte_functionale}), permițând referențierea lor  în etapele ulterioare de proiectare, implementare și testare.
 
 \begin{description}
-    \item[NF1 -- Performanță (latență per cadru).] Pipeline-ul principal de procesare a unui cadru, măsurat de la momentul achiziției până la difuzarea rezultatelor către clienți, trebuie să se încadreze sub \textbf{100~ms per cadru}, ceea ce permite atingerea unei rate de aproximativ \textbf{30~FPS} pe fluxul live al camerei principale. Această țintă este derivată din modul de operare paralel al firelor de execuție: detectoarele costisitoare (SlowFast, YOLO) rulează în fire dedicate, astfel încât latența percepută să fie dominată de cel mai lent detector de pe calea critică (recunoaștere facială și plăcuțe), în timp ce detectoarele costisitoare sunt suprapuse asincron și nu se adună la latența per cadru.
+    \item[NF1 -- Performanță (latență per cadru).] Pipeline-ul principal de procesare a unui cadru, măsurat de la momentul achiziției până la difuzarea rezultatelor către clienți, trebuie să se încadreze sub \textbf{100~ms per cadru}, ceea ce permite atingerea unei rate de aproximativ \textbf{30~FPS} pe fluxul live al camerei principale. Această țintă este derivată din modul de operare paralel al firelor de execuție: fiecare detector rulează într-un fir dedicat, astfel încât latența percepută să fie dominată de cel mai lent detector de pe calea critică (recunoașterea facială), în timp ce detectorul cu cadență de clip (HAR/SlowFast, care procesează clipuri acumulate pe $\sim$2~s) este suprapus asincron și nu se adună la latența per cadru.
 
     \item[NF2 -- Scalabilitate.] Arhitectura trebuie să permită extinderea la \textbf{mai multe camere simultan} fără modificări structurale ale codului, ci doar prin replicarea firelor de captură și ajustarea cozilor de cadre. Modelele AI sunt încărcate o singură dată în memorie și partajate între fluxuri, pentru a evita duplicarea costurilor de inițializare GPU.
 
@@ -80,7 +80,7 @@ Cerințele nefuncționale stabilesc atributele de calitate sub care vor opera fu
 
     \item[NF8 -- Uzabilitate.] Interfața de utilizare este dezvoltată sub forma unei aplicații web \emph{responsive}, fiind accesibilă atât de pe stațiile de lucru fixe, cât și de pe dispozitive mobile pentru supravegherea de la distanță. Accesul în cadrul platformei este structurat pe roluri. Astfel, administratorul beneficiază de control complet asupra zonei de configurare și a gestiunii entităților, în timp ce operatorul utilizează interfața preponderent pentru vizualizarea fluxurilor video live și monitorizarea jurnalului de alarme.
 
-    \item[NF9 -- Portabilitate și mediu de execuție.] Backend-ul este scris în Python (FastAPI), iar inferența AI necesită GPU compatibil CUDA pentru ca \texttt{InsightFace} și celelalte modele să atingă latențele țintă; sistemul detectează automat absența \texttt{CUDAExecutionProvider} și raportează acest lucru la pornire. Frontend-ul este o aplicație React standard, distribuibilă ca artefact static.
+    \item[NF9 -- Portabilitate și mediu de execuție.] Backend-ul este scris în Python (FastAPI), iar inferența AI necesită GPU compatibil CUDA pentru ca \texttt{InsightFace} și celelalte modele să atingă latențele țintă; în absența unui provider CUDA disponibil, \texttt{onnxruntime} revine automat pe \texttt{CPUExecutionProvider}, sistemul rămânând funcțional, dar cu latențe semnificativ mai mari. Frontend-ul este o aplicație React standard, distribuibilă ca artefact static.
 \end{description}
 
 \section{Cazuri de utilizare}
@@ -250,16 +250,25 @@ La nivel intern, backend-ul este descompus în următoarele componente logice. F
 
 Cuplajul între componente este slab: fiecare detector poate fi activat/dezactivat independent (vezi UC8) fără a afecta restul, iar adăugarea unui nou detector se reduce la implementarea aceleiași interfețe (\emph{intrare:} cadru, \emph{ieșire:} listă de detecții) și conectarea unui nou fir cu cozile sale.
 
-\textit{[Diagramă: \textbf{diagrama de componente UML} cu Modul Captură pe stânga, Modul AI ca \emph{component} compus cu cele cinci sub-module nested înăuntru, Modul Fuziune ca hub central, iar pe dreapta API REST + Gestiune WebSocket conectate la Layer Persistență (PostgreSQL + FAISS). Folosiți interfețe \texttt{lollipop} (cercuri) pentru a marca contractele între componente, în special cele oferite de Modul AI către Modul Fuziune (interfața \emph{Detector}). Plasată în \S\ref{subsec:diagrama_componente}.]}
+\clearpage
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth]{componente.pdf}
+	\caption{Diagrama de componente UML a backend-ului. Modulul Captură furnizează cadre (prin interfața \emph{Cadru}) către Modulul AI. Acesta din urmă este o componentă complexă, alcătuită din cele cinci detectoare independente (recunoaștere facială, plăcuțe de înmatriculare, foc/fum, arme și acțiuni umane), care expune contractul comun \emph{Detector} către Modulul Fuziune. Rolul Fuziunii este de a difuza cadrele adnotate către componenta de Gestiune WebSocket și de a salva alarmele și jurnalele generate. În paralel, API-ul REST realizează operațiile de tip CRUD. Ambele componente depind de Nivelul de Persistență, format din baza de date PostgreSQL și indexul FAISS (reconstruit la fiecare pornire). Contractele dintre componente sunt ilustrate vizual prin interfețe de tip \texttt{lollipop}.}
+	\label{fig:componente}
+\end{figure}
+
+\clearpage
 
 \subsection{Diagrama de implementare (deployment)}
 \label{subsec:diagrama_deployment}
 
-Distribuția fizică a sistemului este simplă în varianta de bază -- un singur nod server pe care rulează tot ce ține de procesare -- și se poate extinde modular dacă numărul de camere sau de clienți crește. Nodurile descrise mai jos sunt suficiente pentru scenariul demonstrativ al lucrării și pentru un deployment pilot.
+Distribuția fizică a sistemului este simplă în varianta de bază, constând într-un singur nod server pe care rulează toate componentele de procesare. Această arhitectură se poate extinde modular în cazul în care numărul de camere sau de clienți crește. Nodurile descrise mai jos sunt suficiente atât pentru scenariul demonstrativ al lucrării, cât și pentru un deployment de tip pilot.
 
 \subsubsection{Nodul client (browser)}
 
-Orice mașină cu un browser modern (Chrome, Firefox, Edge) care suportă WebSocket și \texttt{ES2020}. Nu există dependențe instalate local: aplicația React este servită ca artefact static și se conectează la backend prin URL-ul configurat în \texttt{frontend/.env}. În scenariul de operare pot exista mai mulți clienți simultan (un dispecer pe stație fixă, plus operatori pe dispozitive mobile).
+Orice mașină cu un browser modern (Chrome, Firefox, Edge) care suportă WebSocket și \texttt{ES2020}. Nu există dependențe instalate local: aplicația React este servită ca artefact static și se conectează la backend prin URL-ul configurat în \texttt{frontend/.env}. În scenariul de operare pot exista mai mulți clienți simultan.
 
 \subsubsection{Nodul server cu GPU}
 
@@ -268,41 +277,52 @@ Mașina principală a sistemului, pe care rulează:
     \item procesul Python \texttt{app.py} (FastAPI + Uvicorn) cu toate firele AI;
     \item modelele AI încărcate în memoria GPU (InsightFace, YOLOv8, SlowFast, modelul de foc); modelul de emoție FER (Mini-Xception, TensorFlow) este ținut deliberat pe CPU, pentru a evita conflictele de runtime cu \texttt{onnxruntime-gpu};
     \item indexul FAISS în memoria RAM;
-    \item runtime-ul \texttt{onnxruntime-gpu} cu \texttt{CUDAExecutionProvider}, validat la pornire prin \texttt{start\_enhanced\_system.py}.
+    \item runtime-ul \texttt{onnxruntime-gpu} cu \texttt{CUDAExecutionProvider}, configurat la inițializarea InsightFace în \texttt{facial\_recognition\_system.py} (cu fallback pe \texttt{CPUExecutionProvider}).
 \end{itemize}
 Cerințele minime hardware sunt impuse de modelele AI: un GPU cu suport CUDA și cel puțin 8~GB VRAM pentru încărcarea simultană a tuturor detectoarelor; un CPU multi-core pentru cele $\sim$7~fire de execuție; un SSD pentru log-uri și capturi.
 
 \subsubsection{Nodul bază de date}
 
-\textbf{PostgreSQL} poate coexista cu backend-ul pe același host (varianta implicită -- conexiune prin \texttt{localhost}) sau poate fi externalizat pe un nod separat pentru scenarii de producție, accesat prin TCP cu credențiale dedicate. Externalizarea aduce avantaje de backup și replicare, dar nu este obligatorie pentru lucrare.
+\textbf{PostgreSQL} poate coexista cu backend-ul pe același host (varianta implicită -- conexiune prin \texttt{localhost}) sau poate fi externalizat pe un nod separat pentru scenarii de producție, accesat prin TCP cu credențiale dedicate.
 
 \subsubsection{Camere IP}
 
 Camerele sunt noduri independente, conectate la aceeași rețea locală cu serverul, care expun fluxuri RTSP, MJPEG sau HTTP. Identificarea lor este făcută prin URL plus un identificator logic (\texttt{CAM-01}, \texttt{CAM-02} etc.). Latența rețelei dintre camere și server contribuie direct la bugetul de 100~ms al cerinței NF1, motiv pentru care se recomandă rețea cablată sau Wi-Fi dedicat.
 
-\subsubsection{Storage (opțional)}
 
-Pentru deployment-urile cu volum mare de capturi (clipuri video, imagini de alarmă) se poate adăuga un nod de storage dedicat -- NAS sau bucket S3-compatibil -- montat de server ca volum sau accesat prin client-ul corespunzător. În varianta de bază a lucrării, fișierele sunt stocate pe disk-ul local al server-ului, în directorul \texttt{Facial\_detection/}.
-
-\textit{[Diagramă: \textbf{diagrama UML de deployment} cu patru noduri principale desenate ca cuburi 3D: \emph{Client (Browser)}, \emph{Server GPU} (cu artefactele \texttt{app.py}, modelele AI, indexul FAISS desenate ca rectangle nested), \emph{PostgreSQL} (poate fi pe același nod sau separat -- arătați ambele variante printr-un dashed-box opțional), \emph{Camere IP} (multiple instanțe, indicate prin notația \texttt{\{1..n\}}). Etichete pe legături: \texttt{HTTPS/WebSocket} client$\leftrightarrow$server, \texttt{RTSP/HTTP} server$\leftrightarrow$camere, \texttt{TCP/SQL} server$\leftrightarrow$DB. Opțional: un al cincilea nod \emph{Storage} legat de server prin \texttt{NFS/S3}. Plasată în \S\ref{subsec:diagrama_deployment}.]}
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth]{deployment.pdf}
+	\caption{Diagrama de implementare (deployment) UML a sistemului. Nodul \emph{Client (Browser)} -- în una sau mai multe instanțe (\texttt{\{1..m\}}) -- servește aplicația React ca artefact static și comunică cu serverul prin \texttt{HTTP} și \texttt{WebSocket} pe portul \texttt{8000}. Nodul \emph{Server GPU} găzduiește procesul \texttt{app.py} (FastAPI + Uvicorn, cu cele $\sim$7 fire de execuție), modelele AI încărcate în VRAM (InsightFace, cele două instanțe YOLOv8 pentru plăcuțe și arme, SlowFast-R50 și modelul de foc/fum) prin \texttt{onnxruntime-gpu}, modelul de emoție FER ținut deliberat pe CPU, indexul FAISS în memoria RAM și baza de date \textbf{PostgreSQL} (acces prin \texttt{TCP/SQL} pe portul \texttt{5432}, indexul FAISS fiind reconstruit din ea la pornire). \emph{Camerele IP} (\texttt{CAM-01..CAM-n}, \texttt{\{1..n\}}) furnizează fluxuri \texttt{RTSP/MJPEG/HTTP}.}
+	\label{fig:deployment}
+\end{figure}
 
 \section{Proiectarea pipeline-ului multi-threaded}
 \label{sec:pipeline_multithread}
 
-Pipeline-ul multi-threaded este decizia arhitecturală centrală a sistemului -- modul în care backend-ul reușește să ruleze simultan cinci modele AI eterogene (recunoaștere facială, plăcuțe, foc/fum, acțiuni umane, arme) peste fluxul aceleiași camere și să livreze rezultatele agregate în limita de latență NF1. Această secțiune descrie structura firelor de execuție, mecanismele de sincronizare alese și motivează de ce o execuție paralelă în-proces este preferabilă unei secvențiale sau unei descompuneri în microservicii.
+Pipeline-ul multi-threaded reprezinta decizia arhitecturala centrala a sistemului. Acesta defineste modul in care backend-ul reuseste sa ruleze simultan cinci modele AI eterogene procesand fluxul aceleiasi camere, cu scopul de a livra rezultatele agregate respectand limita de latenta NF1. Aceasta sectiune descrie structura firelor de executie, detaliaza mecanismele de sincronizare alese si argumenteaza de ce o executie paralela in-proces este preferabila comparativ cu o executie secventiala sau cu o arhitectura bazata pe microservicii.
 
-Decizia de bază este: \textbf{un fir de execuție per responsabilitate}, \textbf{cozi thread-safe cu capacitate limitată ca mecanism de cuplare slabă}, \textbf{un singur proces care găzduiește toate modelele pe GPU}. Această alegere derivă din trei constrângeri: (i) modelele AI au timpi de inferență neomogeni (de la sub 10~ms pentru YOLO pe persoane până la peste 100~ms pentru SlowFast pe un clip de 64 cadre), (ii) inițializarea GPU a fiecărui model este costisitoare și trebuie făcută o singură dată, (iii) operatorul trebuie să poată activa/dezactiva dinamic detectoarele (cerința F7bis, NF5).
+Decizia de bază este: \textbf{un fir de execuție per responsabilitate}, \textbf{cozi thread-safe cu capacitate limitată ca mecanism de cuplare slabă}, \textbf{un singur proces care găzduiește toate modelele pe GPU}. Această alegere derivă din trei constrângeri: (i) modelele AI au timpi de inferență neomogeni, care se întind pe mai bine de un ordin de mărime -- de la $\sim$4~ms pentru detecția YOLO a plăcuțelor până la $\sim$83~ms pentru recunoașterea facială cu analiză demografică (latențe măsurate, vezi Tabelul~\ref{tab:latente_inferenta} din \S\ref{subsec:justificare_paralel}), (ii) inițializarea GPU a fiecărui model este costisitoare și trebuie făcută o singură dată, (iii) operatorul trebuie să poată activa/dezactiva dinamic detectoarele (cerința F7bis, NF5).
 
-\textit{[Diagramă: \textbf{diagrama de flux a pipeline-ului} cu cele 7 fire reprezentate ca dreptunghiuri verticale, cozile \texttt{queue.Queue} ca cilindri orizontali între ele, și fluxul cadrelor mergând de la stânga (CaptureThread) prin cele cinci fire AI paralele către dreapta (MergingThread $\to$ \texttt{\_broadcast\_frame} $\to$ cozile per-client \texttt{client\_queues} $\to$ clienții WebSocket). Marcați pe fiecare fir timpul tipic de inferență și pe fiecare coadă \texttt{maxsize=10} cu politica de saturare (omitere la intrare, \emph{drop-oldest} la ieșire). Plasată la începutul \S\ref{subsec:fire_executie}.]}
+\clearpage
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth]{pipeline.pdf}
+	\caption{Diagrama de flux a pipeline-ului multi-threaded. Cele \textbf{șapte fire de execuție} sunt reprezentate ca dreptunghiuri, iar cele unsprezece cozi \texttt{queue.Queue(maxsize=10)} ca cilindri. Fluxul cadrelor pornește de sus, de la \texttt{CaptureThread} (care, prin \texttt{\_dispatch\_frame}, depune câte o copie \texttt{frame.copy()} în cozile de \emph{intrare}), coboară prin cele cinci coloane paralele de fire AI -- fiecare adnotat cu latența de inferență măsurată (Tabelul~\ref{tab:latente_inferenta}) -- ale căror rezultate converg, prin cozile de \emph{ieșire}, către \texttt{MergingThread}. Acesta aplică politica \emph{ultimul cadru disponibil} (folosind \texttt{raw\_frame\_queue} ca \emph{fallback}), declanșează alarmele și difuzează cadrul adnotat prin \texttt{\_broadcast\_frame} în cozile per-client \texttt{client\_queues}, de unde este preluat de clienții WebSocket. Politica de saturare diferă în funcție de direcția cozii: \emph{omitere} la intrare (cadrul nou este abandonat dacă firul detectorului are deja un backlog) și \emph{drop-oldest} la ieșire (se scoate cel mai vechi rezultat pentru a-l insera pe cel nou).}
+	\label{fig:pipeline}
+\end{figure}
+
+\clearpage
 
 \subsection{Cele 7 fire de execuție}
 \label{subsec:fire_executie}
 
-Backend-ul pornește, la inițializarea instanței \texttt{EnhancedSurveillanceSystem}, exact șapte fire de execuție daemon (vizibile în \texttt{app.py} prin numele \texttt{CaptureThread}, \texttt{FaceProcessingThread}, \texttt{PlateProcessingThread}, \texttt{FireProcessingThread}, \texttt{HARProcessingThread}, \texttt{WeaponProcessingThread}, \texttt{MergingThread}). Fiecare fir are o singură responsabilitate și interacționează cu restul \emph{exclusiv} prin cozile partajate, evitând astfel sincronizarea prin variabile partajate la nivel fin.
+Backend-ul pornește, la inițializarea instanței \texttt{EnhancedSurveillanceSystem}, exact șapte fire de execuție daemon (vizibile în \texttt{app.py} prin numele \linebreak \texttt{CaptureThread}, \texttt{FaceProcessingThread}, \texttt{PlateProcessingThread}, \linebreak \texttt{FireProcessingThread}, \texttt{HARProcessingThread}, \texttt{WeaponProcessingThread}, \linebreak \texttt{MergingThread}). Fiecare fir are o singură responsabilitate și interacționează cu restul exclusiv prin cozile partajate, evitând astfel sincronizarea prin variabile partajate la nivel fin.
 
 \subsubsection{Firul 1 -- Captura video}
 
-Firul \texttt{CaptureThread} citește ciclic câte un cadru de la fiecare cameră activă -- camera locală a stației, tratată separat ca \texttt{CAM-01} prin \texttt{self.video\_capture}, și camerele IP înregistrate în structura \texttt{self.cameras} (\texttt{CAM-02}, \texttt{CAM-03}, \dots) -- prin \texttt{cv2.VideoCapture.read()}, cu reconectare automată a camerelor IP căzute. Fiecare cadru primește un \texttt{frame\_id} monoton crescător și, sub rezerva unui mecanism de \emph{frame-skip} (se procesează un cadru la fiecare \texttt{frame\_skip}), este transmis metodei \texttt{\_dispatch\_frame}. Aceasta depune, pentru fiecare detector activ, o \emph{copie} a cadrului (\texttt{frame.copy()}) în coada de procesare corespunzătoare (\texttt{face\_processing\_queue}, \texttt{plate\_processing\_queue}, \texttt{fire\_processing\_queue}, \texttt{har\_processing\_queue}, \texttt{weapon\_processing\_queue}) și, doar dacă toate cozile detectoarelor active au acceptat cadrul, o copie în \texttt{raw\_frame\_queue}, folosită de fuziune ca \emph{fallback} pentru cadrele pentru care nu au sosit încă rezultatele detectoarelor.
+Firul \texttt{CaptureThread} citește ciclic câte un cadru de la fiecare cameră activă prin \texttt{cv2.VideoCapture.read()}, cu reconectare automată a camerelor IP căzute. Fiecare cadru primește un \texttt{frame\_id} monoton crescător și, sub rezerva unui mecanism de \emph{frame-skip} (se procesează un cadru la fiecare \texttt{frame\_skip}), este transmis metodei \texttt{\_dispatch\_frame}. Aceasta depune, pentru fiecare detector activ, o \emph{copie} a cadrului (\texttt{frame.copy()}) în coada de procesare corespunzătoare (\texttt{face\_processing\_queue}, \texttt{plate\_processing\_queue}, \texttt{fire\_processing\_queue}, \texttt{har\_processing\_queue}, \texttt{weapon\_processing\_queue}) și, doar dacă toate cozile detectoarelor active au acceptat cadrul, o copie în \texttt{raw\_frame\_queue}, folosită de fuziune ca \emph{fallback} pentru cadrele pentru care nu au sosit încă rezultatele detectoarelor.
 
 \subsubsection{Firul 2 -- Recunoaștere facială și analiză demografică}
 
@@ -314,23 +334,23 @@ Firul \texttt{PlateProcessingThread} rulează detecția plăcuțelor cu YOLOv8 s
 
 \subsubsection{Firul 4 -- Foc și fum}
 
-Firul \texttt{FireProcessingThread} rulează modelul de detecție foc/fum și, important, menține \textbf{starea temporală} necesară confirmării pe fereastră multi-cadru (cerința F4). O detecție singulară nu produce alarmă -- doar o detecție confirmată pe câteva cadre consecutive declanșează câmpul \texttt{alert} pe rezultatul publicat. Această stare este intern firului și nu necesită sincronizare.
+Firul \texttt{FireProcessingThread} rulează modelul de detecție foc/fum și menține starea temporală necesară confirmării pe fereastră multi-cadru (cerința F4). O detecție singulară nu produce alarmă. Doar o detecție confirmată pe câteva cadre consecutive declanșează câmpul \texttt{alert} pe rezultatul publicat. Această stare este intern firului și nu necesită sincronizare.
 
-\subsubsection{Firul 5 -- Recunoaștere acțiuni umane (HAR)}
+\subsubsection{Firul 5 -- Recunoaștere acțiuni umane}
 
-Firul \texttt{HARProcessingThread} este cel mai costisitor: acumulează cadre într-un buffer intern și, când are clipul complet de 64 cadre la \texttt{clip\_duration\_sec=2.0}, rulează SlowFast-R50 cu pathway-urile slow (8 cadre) și fast (32 cadre) la \texttt{crop\_size=224}, clasificând clipul în \texttt{normal}, \texttt{fight} sau \texttt{vandalism}. Datorită costului ridicat și a inerent batched-ness-ului SlowFast-ului, firul tinde să fie cel care impune ritmul throughput-ului HAR -- de aceea este izolat și nu blochează celelalte detectoare.
+Firul \texttt{HARProcessingThread} are un regim de funcționare distinct: acumulează cadre într-un buffer intern și, când are clipul complet de 64 cadre la \linebreak \texttt{clip\_duration\_sec=2.0}, rulează SlowFast-R50 cu pathway-urile slow (8 cadre) și fast (32 cadre) la \texttt{crop\_size=224}, clasificând clipul în \texttt{normal}, \texttt{fight} sau \texttt{vandalism}. Forward-pass-ul SlowFast nu este cel mai scump dintre detectoare -- măsurat, el costă în mediană $\sim$8~ms pe GPU (Tabelul~\ref{tab:latente_inferenta}), mult sub recunoașterea facială. Particularitatea acestui fir este \emph{cadența}, nu costul brut: el produce un rezultat o singură dată la $\sim$2~s, pe măsură ce se umple clipul de 64 de cadre. Motivul principal pentru izolarea acestui modul nu este riscul de a bloca resursa GPU, ci necesitatea de a preveni ca ritmul său de acumulare a cadrelor să dicteze rata de actualizare a celorlalte detectoare din pipeline.
 
 \subsubsection{Firul 6 -- Arme}
 
-Firul \texttt{WeaponProcessingThread} rulează modelul YOLOv8m fine-tuned pe clasa unică \texttt{weapon}. Este separat de detectorul de plăcuțe (deși ambele folosesc YOLO) pentru că instanțele de model sunt distincte (greutăți diferite, clase diferite) și pentru că severitatea detecției de armă justifică un fir dedicat care nu poate fi blocat de OCR-ul plăcuțelor.
+Firul \texttt{WeaponProcessingThread} rulează modelul YOLOv8m fine-tuned pe clasa unică \texttt{weapon}. Detecția de armă este fără stare — fiecare cadru produce un rezultat independent printr-un singur forward-pass, fără buffer temporal (ca HAR) și fără procesare în aval pe ROI-uri (ca OCR-ul plăcuțelor). Tocmai această independență între cadre justifică firul dedicat: detecția poate rula la rata maximă a camerei, izolată de latența celorlalte detectoare — esențial pentru o clasă critică pentru siguranță.
 
 \subsubsection{Firul 7 -- Fuziune}
 
-Firul \texttt{MergingThread} este nucleul de agregare: consumă neblocant din toate cozile de rezultate (\texttt{face\_results\_queue}, \texttt{plate\_results\_queue}, \texttt{fire\_results\_queue}, \texttt{har\_results\_queue}, \texttt{weapon\_results\_queue}) plus din \texttt{raw\_frame\_queue}, asociază rezultatele după \texttt{frame\_id} și produce mesajul final pentru clienți (cadru adnotat + listă de detecții + alarme noi). Tot aici se aplică logica de declanșare a alarmelor (verificarea zonelor restricționate via \texttt{\_person\_zones\_cache}, deduplicarea pe baza dicționarului \texttt{alarm\_cooldowns} cu un cooldown de 30~s, jurnalizarea cu deduplicare pe \texttt{log\_cooldowns} de 5~s). Mesajul final este difuzat prin metoda \texttt{\_broadcast\_frame}, care îl depune în coada proprie a fiecărui client WebSocket conectat (dicționarul \texttt{client\_queues}), fără a trece printr-o coadă de ieșire partajată.
+Firul \texttt{MergingThread} este nucleul de agregare: consumă neblocant din toate cozile de rezultate (\texttt{face\_results\_queue}, \texttt{plate\_results\_queue}, \linebreak \texttt{fire\_results\_queue}, \texttt{har\_results\_queue}, \texttt{weapon\_results\_queue}) \linebreak plus din \texttt{raw\_frame\_queue}, asociază rezultatele după \texttt{frame\_id} și produce \linebreak mesajul final pentru clienți (cadru adnotat + listă de detecții + alarme noi). Tot aici se aplică logica de declanșare a alarmelor (verificarea zonelor restricționate via \texttt{\_person\_zones\_cache}, deduplicarea pe baza dicționarului \texttt{alarm\_cooldowns} cu un cooldown de 30~s, jurnalizarea cu deduplicare pe \texttt{log\_cooldowns} de 5~s). Mesajul final este difuzat prin metoda \texttt{\_broadcast\_frame}, care îl depune în coada proprie a fiecărui client WebSocket conectat (dicționarul \texttt{client\_queues}), fără a trece printr-o coadă de ieșire partajată.
 
 \subsubsection{Justificarea separării}
 
-Alocarea pe fire respectă două principii: \textbf{omogenitatea computațională} (operații care partajează intrarea și cache-ul GPU stau împreună -- ex.\ recunoaștere facială cu demografie, detecție plăcuță cu OCR) și \textbf{izolarea costului} (firele scumpe -- HAR, SlowFast -- sunt singure pentru a nu bloca celelalte). Numărul 7 nu este un obiectiv în sine, ci o consecință a celor cinci familii de detecții cerute plus capătul de pipeline (captură) și nucleul de agregare (fuziune).
+Alocarea pe fire respectă două principii: \textbf{omogenitatea computațională} (operații care partajează intrarea și cache-ul GPU stau împreună -- ex.\ recunoaștere facială cu demografie, detecție plăcuță cu OCR) și \textbf{izolarea costului și a cadenței} (firul cel mai costisitor pe cadru -- recunoașterea facială cu demografie, $\sim$83~ms -- și firul cu cadență de clip -- HAR -- rămân separate, ca să nu impună latența, respectiv ritmul lor, celorlalte detectoare). Numărul 7 nu este un obiectiv în sine, ci o consecință a celor cinci familii de detecții cerute plus capătul de pipeline (captură) și nucleul de agregare (fuziune).
 
 \subsection{Mecanismele de sincronizare}
 \label{subsec:sincronizare}
@@ -339,19 +359,19 @@ Sincronizarea este realizată prin \textbf{cozi thread-safe cu capacitate limita
 
 \subsubsection{Cozi thread-safe}
 
-Toate cele unsprezece cozi folosite de pipeline sunt \texttt{queue.Queue(maxsize=10)} -- cozi FIFO cu blocaj intern și suport nativ pentru \texttt{block=False} și \texttt{timeout=...}. Capacitatea limitată la 10 este o decizie explicită: un buffer scurt înseamnă latență mică (cadrul cel mai vechi în pipeline este de cel mult 10 cadre vechi), dar înseamnă și că saturarea trebuie tratată. Politica de saturare diferă în funcție de direcția cozii, dar urmărește același scop -- a nu lăsa coada să crească: la \textbf{intrare} (cozile de procesare \texttt{*\_processing\_queue} și \texttt{raw\_frame\_queue}, alimentate de \texttt{CaptureThread} prin \texttt{\_dispatch\_frame}), când coada unui detector este plină, cadrul nou este pur și simplu \emph{omis} (incrementând un contor de \texttt{queue\_skips}), pentru că detectorul respectiv încă procesează un backlog și nu are rost să-l adâncim; la \textbf{ieșire} (cozile \texttt{*\_results\_queue} și cozile per-client WebSocket), producătorul aplică \textbf{drop-oldest} -- scoate explicit elementul cel mai vechi cu \texttt{get(block=False)} și inserează noul rezultat. În ambele cazuri principiul este același: \emph{contează cel mai recent cadru/rezultat, nu acumularea unei coade întregi de date vechi}.
+Toate cele unsprezece cozi folosite de pipeline sunt \texttt{queue.Queue(maxsize=10)} -- cozi FIFO cu blocaj intern și suport nativ pentru apeluri ne-blocante \linebreak (\texttt{block=False}) și pentru așteptare cu termen-limită (de exemplu \texttt{get(timeout= \linebreak 0.1)}). Capacitatea limitată la 10 este o decizie explicită: un buffer scurt înseamnă latență mică (cadrul cel mai vechi în pipeline este de cel mult 10 cadre vechi), dar înseamnă și că saturarea trebuie tratată. Politica de saturare diferă în funcție de direcția cozii, dar urmărește același scop -- a nu lăsa coada să crească: la \textbf{intrare} (cozile de procesare \texttt{*\_processing\_queue} și \texttt{raw\_frame\_queue}, alimentate de \texttt{CaptureThread} prin \texttt{\_dispatch\_frame}), când coada unui detector (\texttt{*\_processing\_queue}) este plină, cadrul nou este pur și simplu \emph{omis} (incrementând contorul \texttt{queue\_skips}), pentru că detectorul respectiv încă procesează un backlog și nu are rost să-l adâncim; coada \texttt{raw\_frame\_queue} este alimentată doar dacă toate cozile detectoarelor au acceptat cadrul, iar în caz contrar -- sau dacă ea însăși este plină -- cadrul este numărat separat în contorul \texttt{frames\_dropped}; la \textbf{ieșire} (cozile \texttt{*\_results\_queue} și cozile per-client WebSocket), producătorul aplică \textbf{drop-oldest} -- scoate explicit elementul cel mai vechi cu \texttt{get(block=False)} și inserează noul rezultat. În ambele cazuri principiul este același: \emph{contează cel mai recent cadru/rezultat, nu acumularea unei coade întregi de date vechi}.
 
 \subsubsection{Partajarea cadrului curent}
 
-Cadrele citite de \texttt{CaptureThread} sunt \emph{clonate} (\texttt{frame.copy()}) înainte de a fi distribuite în cozile detectoarelor. Această decizie -- aparent risipitoare -- elimină complet sincronizarea pe conținutul cadrului: fiecare fir AI lucrează pe propria copie, fără riscul ca alt fir să modifice pixelii sub picioarele lui. Costul memoriei este absorbit de capacitatea limitată a cozilor (cel mult $11 \times 10 = 110$ cadre simultan în RAM, în jur de $200$~MB pentru rezoluții HD), iar costul copierii este sub 1~ms, neglijabil față de bugetul NF1.
+Cadrele citite de \texttt{CaptureThread} sunt \emph{clonate} (\texttt{frame.copy()}) înainte de a fi distribuite în cozile detectoarelor. Această decizie elimină complet sincronizarea pe conținutul cadrului: fiecare fir AI lucrează pe propria copie, prevenind astfel riscul modificării concurente a matricei de pixeli de către un alt fir de execuție. Costul memoriei este absorbit de capacitatea limitată a cozilor (cel mult $11 \times 10 = 110$ cadre simultan în RAM, în jur de $200$~MB pentru rezoluții HD), iar costul copierii este sub 1~ms, neglijabil față de bugetul NF1.
 
 \subsubsection{Mecanismul \emph{ultimul cadru disponibil}}
 
-Firul de fuziune nu așteaptă să aibă rezultatele \emph{tuturor} detectoarelor pentru fiecare \texttt{frame\_id}. Așteptarea ar reduce throughput-ul la minimum dintre detectoare (HAR, care livrează rezultate o dată la $\sim$2~s, ar limita restul la $0.5$~FPS). În schimb, fuziunea aplică o politică de tip \emph{ultimul cadru disponibil}: consumă neblocant din toate cozile de rezultate, păstrează în structuri locale ultimele rezultate per cameră primite de la fiecare detector și le suprapune pe cadrul cel mai recent. Astfel, detecțiile rapide (fețe, plăcuțe) sunt afișate la rata camerei, iar detecțiile lente (HAR) sunt suprapuse cu valorile lor cele mai recente până când vine o actualizare. Acest mecanism este cel care permite respectarea cerinței NF1 de 30~FPS \emph{indiferent} de detectorul cel mai lent activ.
+Firul de fuziune nu așteaptă să aibă rezultatele \emph{tuturor} detectoarelor pentru fiecare \texttt{frame\_id}. Așteptarea ar reduce throughput-ul la minimum dintre detectoare (HAR, care livrează rezultate o dată la $\sim$2~s, ar limita restul la $0.5$~FPS). În schimb, fuziunea aplică o politică de tip \emph{ultimul cadru disponibil}: consumă neblocant din toate cozile de rezultate, păstrează în structuri locale ultimele rezultate per cameră primite de la fiecare detector și le suprapune pe cadrul cel mai recent. Astfel, detecțiile cu cadență continuă, produse pentru fiecare cadru (fețe, plăcuțe, foc, armă), sunt afișate la rata camerei, iar detecția cu cadență de clip (HAR), care livrează un rezultat o dată la $\sim$2~s, este suprapusă cu valoarea ei cea mai recentă până la următoarea actualizare. Acest mecanism este cel care permite respectarea cerinței NF1 de 30~FPS \emph{indiferent} de detectorul cel mai lent activ.
 
 \subsubsection{Stare partajată protejată prin lock-uri}
 
-Câteva structuri trebuie totuși accesate concurent: lista camerelor active (\texttt{cameras\_lock}), dicționarele de cooldown pentru alarme și jurnale (\texttt{alarm\_lock}, \texttt{log\_lock}), cache-urile de autorizare pe zone (\texttt{\_zone\_cache\_lock}) și dicționarul cozilor per-client WebSocket (\texttt{client\_lock}). Pentru toate acestea se folosesc lock-uri de tip \texttt{threading.Lock}, cu scope foarte restrâns (câteva linii înăuntrul blocului \texttt{with self.X\_lock:}), pentru a minimiza timpul în care un fir este blocat.
+Câteva structuri trebuie totuși accesate concurent: lista camerelor active \linebreak (\texttt{cameras\_lock}), dicționarele de cooldown pentru alarme și jurnale (\texttt{alarm\_lock}, \texttt{log\_lock}), cache-urile de autorizare pe zone (\texttt{\_zone\_cache\_lock}) și dicționarul cozilor per-client WebSocket (\texttt{client\_lock}). Pentru toate acestea se folosesc lock-uri de tip \texttt{threading.Lock}, cu scope foarte restrâns (câteva linii înăuntrul blocului \texttt{with self.X\_lock:}), pentru a minimiza timpul în care un fir este blocat.
 
 \subsection{Justificarea procesării paralele}
 \label{subsec:justificare_paralel}
@@ -362,9 +382,43 @@ Alternativa naturală la pipeline-ul paralel este \textbf{procesarea secvențial
 
 Modelele AI partajează aceeași memorie GPU, dar nu același tip de calcul: InsightFace face inferență single-shot pe regiuni mici, YOLO face inferență pe imagine întreagă, SlowFast face inferență pe clip 3D temporal. Rularea lor în fire separate permite suprapunerea \textbf{copierii host$\to$device} a unui detector cu \textbf{kernel execution} a altuia, prin streams CUDA, ceea ce într-o execuție secvențială ar rămâne timp mort. În plus, ONNX Runtime și PyTorch folosesc thread pool-uri interne care exploatează concurența la nivel de operator -- iar acestea sunt active doar dacă apelurile vin din fire diferite.
 
+\subsubsection{Măsurarea latențelor de inferență}
+\label{subsec:masurare_latente}
+
+Cifrele de latență folosite în această secțiune și în Figura~\ref{fig:pipeline} nu sunt estimări, ci valori \textbf{măsurate} pe sistemul real. Pentru aceasta a fost rulat un script de \linebreak benchmark dedicat (\inlinecode{benchmark\_inference.py}), care încarcă fiecare detector exact ca în \inlinecode{app.py} și îi cronometrează metoda \inlinecode{process\_frame} pe un clip video reprezentativ -- o filmare în care apar mai multe persoane (deci mai multe fețe simultan) și, ocazional, autovehicule cu plăcuțe de înmatriculare vizibile.
+
+Metodologia urmărește izolarea timpului \emph{de inferență} de costurile de pornire. Pentru fiecare detector se rulează întâi 10 cadre de încălzire (prima inferență pe GPU este sistematic mai lentă, din cauza alocării de memorie și a compilării kernel-urilor CUDA), apoi se măsoară 200 de cadre cu \inlinecode{time.perf\_counter()}, forțând sincronizarea GPU (\inlinecode{torch.cuda.synchronize()}) înainte de oprirea cronometrului, astfel încât să se contorizeze execuția efectivă a kernel-urilor, nu doar lansarea lor asincronă. Se raportează mediana și percentila 95, mai robuste decât media în prezența cozilor lungi de latență. Inițializarea modelelor (încărcarea pe GPU) nu este inclusă în măsurători.
+
+Măsurătorile au fost efectuate pe o stație cu \textbf{GPU NVIDIA GeForce RTX 4060 Laptop}, \textbf{CPU Intel Core Ultra 9 185H} și 30~GB RAM. Toate modelele rulează pe GPU, cu o singură excepție notabilă: clasificatorul de emoții (Mini-Xception/FER) rulează \textbf{pe CPU}, deoarece este suficient de mic încât latența să rămână acceptabilă, iar GPU-ul rămâne dedicat modelelor grele (vezi \S\ref{subsec:inferenta_cpu}). Rezultatele sunt sintetizate în Tabelul~\ref{tab:latente_inferenta}.
+
+\begin{table}[h]
+\centering
+\caption{Latențe de inferență măsurate per detector, pe un clip video reprezentativ (200 de cadre măsurate per modul, după 10 cadre de încălzire). Hardware: GPU NVIDIA GeForce RTX 4060 Laptop, CPU Intel Core Ultra 9 185H.}
+\label{tab:latente_inferenta}
+\small
+\begin{tabular}{p{6.6cm}rrr}
+\hline
+\textbf{Detector} & \textbf{Mediană} & \textbf{p95} & \textbf{Debit} \\
+ & \textbf{(ms)} & \textbf{(ms)} & \textbf{(cadre/s)} \\
+\hline
+Plăcuțe (YOLOv8 + EasyOCR)$^{*}$ & 4.0 & 4.7 & 249 \\
+Foc/fum & 24.6 & 25.6 & 41 \\
+Armă (YOLOv8m) & 13.1 & 13.5 & 76 \\
+Acțiuni umane HAR (SlowFast-R50) & 8.1 & 17.3 & 124 \\
+Recunoaștere facială (InsightFace + FAISS + FER) & 83.4 & 161.4 & 12 \\
+\hline
+\end{tabular}
+\normalsize
+
+\vspace{3pt}
+{\footnotesize $^{*}$ Mediana modulului de plăcuțe este dominată de cadrele fără plăcuță, în care rulează doar detecția YOLO; când EasyOCR se declanșează pe o plăcuță prezentă, latența crește la $\sim$40--125~ms (vizibil în valorile maxime).}
+\end{table}
+
+Trei precizări sunt necesare pentru interpretarea corectă a cifrelor. În primul rând, fiecare detector a fost măsurat \emph{izolat}; în pipeline-ul real, cele cinci modele rulează concurent pe aceeași placă, astfel încât latențele sub sarcină completă, cu competiție pentru resursele GPU, sunt mai mari decât valorile per-modul din tabel -- care reprezintă deci un \emph{plafon} optimist. În al doilea rând, mediana de $\sim$4~ms a modulului de plăcuțe reflectă majoritatea cadrelor în care \emph{nu} apare nicio plăcuță (rulează doar detecția YOLO); comportamentul real este dependent de date, latența urcând la $\sim$40--125~ms atunci când OCR-ul se aplică efectiv pe o plăcuță. În al treilea rând, cifrele sunt specifice hardware-ului folosit; pe un alt GPU ele s-ar modifica proporțional, motiv pentru care configurația de test este raportată explicit.
+
 \subsubsection{Latența percepută per modul}
 
-Într-un pipeline secvențial, latența percepută de utilizator pentru \emph{orice} detector este suma timpilor de inferență ai \emph{tuturor} detectoarelor active. Dacă SlowFast costă $\sim$120~ms, recunoașterea facială $\sim$20~ms și plăcuțele $\sim$40~ms, atunci chiar și un client interesat doar de fețe ar primi rezultate la $\sim$180~ms după captură, depășind clar pragul NF1 de 100~ms. În pipeline-ul paralel, fiecare modul își are propria latență individuală, iar mecanismul \emph{ultimul cadru disponibil} face ca afișarea să fie limitată de cel mai rapid detector, nu de cel mai lent.
+Într-un pipeline secvențial, latența percepută de utilizator pentru \emph{orice} detector este suma timpilor de inferență ai \emph{tuturor} detectoarelor active. Cu latențele măsurate (Tabelul~\ref{tab:latente_inferenta}), suma medianelor celor cinci detectoare este de $\sim$133~ms ($4 + 25 + 13 + 8 + 83$~ms), iar doar recunoașterea facială costă $\sim$83~ms. Astfel, chiar și un client interesat exclusiv de fețe ar primi rezultate abia după ce \emph{toate} detectoarele active au terminat, adică la $\sim$133~ms după captură. Aceasta ar reduce rata de afișare la $\sim$7--8~cadre/s, sub pragul NF1 de 30~FPS, și ar depăși bugetul de latență de 100~ms. În pipeline-ul paralel, fiecare modul își are propria latență individuală (de la $\sim$4~ms la $\sim$83~ms), iar mecanismul \emph{ultimul cadru disponibil} face ca afișarea să fie limitată de rata camerei, nu de suma detectoarelor.
 
 \subsubsection{Dezactivarea selectivă}
 
@@ -372,7 +426,7 @@ Cerința F7bis cere posibilitatea activării/dezactivării individuale a detecto
 
 \subsubsection{Tolerare la eșec}
 
-Dacă un detector intră într-o eroare recuperabilă (excepție tratată local, model temporar nedisponibil), pipeline-ul paralel continuă fără el; firul respectiv consumă cadrele și loghează eroarea, iar fuziunea raportează absența rezultatelor ca o lipsă tăcută. Într-un pipeline secvențial, o excepție într-un detector ar trebui prinsă explicit, iar latența cumulată a try/except-urilor ar contamina toate cadrele.
+Dacă un detector se confruntă cu o eroare recuperabilă (excepție tratată la nivel local sau model temporar indisponibil), pipeline-ul paralel funcționează independent de acesta. Firul de execuție corespunzător consumă în continuare cadrele din buffer și înregistrează eroarea, iar etapa de fuziune gestionează lipsa datelor în mod transparent. Într-un flux secvențial, orice excepție ar trebui interceptată individual, iar penalizarea de performanță generată de blocurile \texttt{try/except} s-ar propaga asupra latenței întregului sistem.
 
 \subsubsection{De ce nu microservicii separate}
 
@@ -381,7 +435,7 @@ O variantă și mai distribuită ar fi un detector per proces (sau per container
 \section{Proiectarea API-ului REST}
 \label{sec:api_rest}
 
-Toate operațiile tranzacționale ale sistemului -- autentificare, CRUD pe entități, interogări de jurnale și statistici, control al modulelor AI -- sunt expuse printr-un API REST construit cu FastAPI și montat sub prefixul comun \texttt{/api}. Canalul REST este complementar canalului WebSocket (\S\ref{sec:proiectare_websocket}): REST-ul servește cereri punctuale, sincrone, cerere-răspuns, în timp ce WebSocket-ul servește fluxul continuu de cadre și alarme. Această secțiune prezintă endpoint-urile grupate pe categorii, convențiile de denumire, structura răspunsurilor și codurile de eroare folosite.
+Toate operațiile tranzacționale ale sistemului (precum autentificarea, operațiile de tip CRUD asupra entităților, interogarea jurnalelor și a statisticilor, alături de controlul modulelor AI) sunt expuse prin intermediul unui API REST. Acesta este dezvoltat utilizând framework-ul FastAPI și este montat sub prefixul comun \texttt{/api}. Acest canal de comunicare este complementar protocolului WebSocket (detaliat în \S\ref{sec:proiectare_websocket}). Mai exact, API-ul REST deservește cereri punctuale, sincrone, bazate pe paradigma cerere-răspuns, în timp ce conexiunea WebSocket este dedicată transmiterii fluxului continuu de cadre video și alerte. Prezenta secțiune detaliază endpoint-urile disponibile (grupate pe categorii de funcționalități), convențiile de denumire adoptate, formatul standardizat al răspunsurilor și codurile HTTP de eroare utilizate.
 
 \subsubsection{Convenții de denumire}
 

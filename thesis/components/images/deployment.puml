@@ -1,0 +1,73 @@
+@startuml deployment
+' Diagrama de implementare (deployment) UML - sistemul de supraveghere inteligent (S4.3.3)
+
+skinparam shadowing false
+skinparam backgroundColor transparent
+skinparam defaultFontName Serif
+skinparam defaultFontSize 13
+skinparam linetype ortho
+skinparam nodesep 110
+skinparam ranksep 60
+skinparam ArrowColor #555555
+skinparam ArrowFontColor #333333
+
+skinparam node {
+  BorderColor #333333
+  BackgroundColor #EAF1FB
+  FontColor #111111
+  FontStyle bold
+}
+skinparam artifact {
+  BorderColor #B0792C
+  BackgroundColor #FFF3E0
+  FontColor #111111
+}
+skinparam database {
+  BorderColor #2E7D32
+  BackgroundColor #E8F5E9
+  FontColor #111111
+}
+skinparam rectangle {
+  BorderColor #5A6B8C
+  BackgroundColor #FFFFFF
+  FontColor #111111
+}
+
+' ===== Actori externi (stanga) =====
+node "Client (Browser)\n<size:10>{1..m}</size>" as Client {
+  artifact "Aplicație React\n<size:10>artefact static (SPA)</size>" as React
+}
+
+node "Camere IP\n<size:10>CAM-01 .. CAM-n   {1..n}</size>" as Cam {
+  artifact "Flux video\n<size:10>RTSP / MJPEG / HTTP</size>" as Stream
+}
+
+' ===== Nodul server cu GPU (centru) =====
+node "Server GPU\n<size:10>Linux + CUDA, >= 8 GB VRAM, CPU multi-core, SSD</size>" as Server {
+
+  artifact "app.py\n<size:10>FastAPI + Uvicorn (:8000)</size>\n<size:10>~7 fire de execuție</size>" as App
+
+  rectangle "Modele AI (VRAM)\n<size:10>InsightFace, YOLOv8 (plăcuțe + arme),</size>\n<size:10>SlowFast-R50, model foc/fum</size>" as Models
+
+  rectangle "onnxruntime-gpu\n<size:10>CUDAExecutionProvider</size>\n<size:10>(fallback CPU)</size>" as ORT
+
+  rectangle "FER Mini-Xception\n<size:10>TensorFlow, ținut pe CPU</size>" as FER
+
+  rectangle "Index FAISS\n<size:10>512-d, în RAM,</size>\n<size:10>reconstruit din DB la pornire</size>" as FAISS
+
+  database "PostgreSQL" as PGlocal
+}
+
+' ===== Legaturi intre noduri =====
+Client -right-> App : HTTP / WebSocket (:8000)
+Cam -right-> App : RTSP / MJPEG / HTTP
+
+' ===== Relatii interne pe nodul server =====
+App --> Models
+App --> FER
+App --> FAISS
+App --> PGlocal : TCP / SQL (:5432)
+Models ..> ORT : inferență GPU
+PGlocal .up.> FAISS : reconstruit\nla pornire
+
+@enduml
