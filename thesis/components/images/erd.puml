@@ -1,0 +1,160 @@
+@startuml erd
+' Diagrama entitate-relatie (ERD) - schema PostgreSQL "facial_recognition" (S Proiectarea bazei de date)
+' Sursa: Facial_detection/database_manager.py (blocul CREATE TABLE)
+
+hide circle
+skinparam linetype ortho
+skinparam shadowing false
+skinparam backgroundColor transparent
+skinparam defaultFontName Serif
+skinparam defaultFontSize 12
+skinparam ArrowColor #555555
+
+skinparam class {
+  BorderColor #333333
+  BackgroundColor #EAF1FB
+  FontColor #111111
+  AttributeFontColor #111111
+}
+
+' Legenda notatiei
+legend top left
+  <b>Notatie</b>
+  <u>id</u> = cheie primara (PK)   |   * UNIQUE   |   (FK) cheie straina
+  --> linie continua = cheie straina, cu politica ON DELETE
+  ..> linie punctata = legatura logica (la nivel de aplicatie, fara FK)
+endlegend
+
+' ===================== ENTITATI =====================
+
+entity "persons" as persons {
+  <u>id</u> : SERIAL
+  --
+  name : VARCHAR
+  *employee_id : VARCHAR(50)  <<UNIQUE, NOT NULL>>
+  department : VARCHAR
+  authorized_zones : TEXT[]  <<multi-valoare, denormalizat>>
+  created_at : TIMESTAMP
+}
+
+entity "face_embeddings" as face_embeddings {
+  <u>id</u> : SERIAL
+  --
+  person_id : INTEGER (FK)
+  embedding : BYTEA  <<NOT NULL, InsightFace 512-d>>
+  created_at : TIMESTAMP
+}
+
+entity "access_logs" as access_logs {
+  <u>id</u> : SERIAL
+  --
+  person_id : INTEGER (FK)
+  camera_id : VARCHAR  <<logic, fara FK>>
+  confidence : REAL
+  detected_at : TIMESTAMP
+}
+
+entity "license_plates" as license_plates {
+  <u>id</u> : SERIAL
+  --
+  *plate_number : VARCHAR(20)  <<UNIQUE, NOT NULL, cheie naturala>>
+  vehicle_type : VARCHAR
+  owner_name : VARCHAR
+  owner_id : VARCHAR
+  is_authorized : BOOLEAN  <<DEFAULT TRUE>>
+  registration_date : DATE
+  expiry_date : DATE
+  notes : TEXT
+}
+
+entity "vehicle_access_logs" as vehicle_access_logs {
+  <u>id</u> : SERIAL
+  --
+  plate_number : VARCHAR (FK)
+  camera_id : VARCHAR  <<logic, fara FK>>
+  confidence : REAL
+  vehicle_type : VARCHAR
+  detected_at : TIMESTAMP
+  image_path : VARCHAR
+  is_authorized : BOOLEAN
+}
+
+entity "users" as users {
+  <u>id</u> : SERIAL
+  --
+  *username : VARCHAR(50)  <<UNIQUE, NOT NULL>>
+  password_hash : VARCHAR
+  role : VARCHAR(20)  <<DEFAULT 'user'>>
+  full_name : VARCHAR
+  created_at : TIMESTAMP
+}
+
+entity "alarms" as alarms {
+  <u>id</u> : SERIAL
+  --
+  camera_id : VARCHAR  <<NOT NULL, logic, fara FK>>
+  type : VARCHAR  <<NOT NULL>>
+  severity : VARCHAR  <<DEFAULT 'medium'>>
+  status : VARCHAR  <<DEFAULT 'unresolved'>>
+  description : TEXT
+  snapshot : TEXT  <<JPEG+Base64>>
+  detection_metadata : JSONB
+  created_at : TIMESTAMP
+  resolved_at : TIMESTAMP
+  resolved_by : VARCHAR
+  notes : TEXT
+}
+
+entity "zones" as zones {
+  <u>id</u> : SERIAL
+  --
+  *name : VARCHAR(100)  <<UNIQUE, NOT NULL>>
+  description : TEXT
+  is_restricted : BOOLEAN  <<DEFAULT FALSE>>
+  created_at : TIMESTAMP
+}
+
+entity "cameras" as cameras {
+  <u>id</u> : SERIAL
+  --
+  *camera_id : VARCHAR(50)  <<UNIQUE, NOT NULL>>
+  name : VARCHAR
+  zone_id : INTEGER (FK)
+  location : VARCHAR
+  stream_url : VARCHAR
+  camera_type : VARCHAR  <<DEFAULT 'ip'>>
+  created_at : TIMESTAMP
+}
+
+entity "detection_logs" as detection_logs {
+  <u>id</u> : SERIAL
+  --
+  camera_id : VARCHAR  <<NOT NULL, logic, fara FK>>
+  type : VARCHAR  <<NOT NULL>>
+  subject : VARCHAR
+  confidence : REAL
+  severity : VARCHAR
+  status : VARCHAR
+  details : JSONB
+  created_at : TIMESTAMP
+}
+
+' ===================== RELATII CU CHEI STRAINE =====================
+' Notatie crow's-foot: ||--o{  = unu-la-multi
+
+persons        ||--o{ face_embeddings     : "ON DELETE CASCADE"
+persons        ||--o{ access_logs         : "ON DELETE CASCADE"
+license_plates ||--o{ vehicle_access_logs : "ON DELETE CASCADE"
+zones          ||--o{ cameras             : "ON DELETE SET NULL"
+
+' ===================== LEGATURI LOGICE (FARA FK) =====================
+' persoana--zona: prin nume (authorized_zones TEXT[]), nu prin tabel de jonctiune
+persons ..> zones : "autorizare prin nume\n(fara FK, fara jonctiune)"
+
+' camera_id este VARCHAR, nu FK catre cameras
+cameras <.. access_logs         : "camera_id (logic)"
+cameras <.. vehicle_access_logs : "camera_id (logic)"
+cameras <.. alarms              : "camera_id (logic)"
+cameras <.. detection_logs      : "camera_id (logic)"
+
+@enduml

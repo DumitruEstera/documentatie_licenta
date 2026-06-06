@@ -61,14 +61,14 @@ Figura~\ref{fig:usecase} sintetizează cele 10 cerințe funcționale sub forma u
 \subsection{Cerințe non-funcționale}
 \label{subsec:cerinte_nonfunctionale}
 
-Cerințele nefuncționale stabilesc atributele de calitate sub care vor opera funcționalitățile sistemului. Acestea sunt marcate prin identificatori de forma \texttt{NF\textit{x}} (paralel cu \texttt{F\textit{x}} din \S\ref{subsec:cerinte_functionale}), permițând referențierea lor  în etapele ulterioare de proiectare, implementare și testare.
+Cerințele nefuncționale stabilesc atributele de calitate sub care vor opera \linebreak funcționalitățile sistemului. Acestea sunt marcate prin identificatori de forma \texttt{NF\textit{x}} (paralel cu \texttt{F\textit{x}} din \S\ref{subsec:cerinte_functionale}), permițând referențierea lor  în etapele ulterioare de proiectare, implementare și testare.
 
 \begin{description}
     \item[NF1 -- Performanță (latență per cadru).] Pipeline-ul principal de procesare a unui cadru, măsurat de la momentul achiziției până la difuzarea rezultatelor către clienți, trebuie să se încadreze sub \textbf{100~ms per cadru}, ceea ce permite atingerea unei rate de aproximativ \textbf{30~FPS} pe fluxul live al camerei principale. Această țintă este derivată din modul de operare paralel al firelor de execuție: fiecare detector rulează într-un fir dedicat, astfel încât latența percepută să fie dominată de cel mai lent detector de pe calea critică (recunoașterea facială), în timp ce detectorul cu cadență de clip (HAR/SlowFast, care procesează clipuri acumulate pe $\sim$2~s) este suprapus asincron și nu se adună la latența per cadru.
 
     \item[NF2 -- Scalabilitate.] Arhitectura trebuie să permită extinderea la \textbf{mai multe camere simultan} fără modificări structurale ale codului, ci doar prin replicarea firelor de captură și ajustarea cozilor de cadre. Modelele AI sunt încărcate o singură dată în memorie și partajate între fluxuri, pentru a evita duplicarea costurilor de inițializare GPU.
 
-    \item[NF3 -- Securitate.] Operațiile sensibile ale API-ului (precum gestiunea persoanelor, zonelor, plăcuțelor, utilizatorilor și configurarea modulelor AI) sunt protejate folosind o \textbf{autentificare bazată pe JWT} și restricționate printr-un \textbf{control de acces bazat pe roluri (RBAC)} cu nivelurile \texttt{admin} și \texttt{user}. Mai exact, acțiunile administrative sunt condiționate de dependența \texttt{require\_admin}, regulă aplicată și endpoint-urilor de control al camerelor. Parolele sunt stocate în format hash (folosind bcrypt), iar token-urile au un timp de viață limitat la 8~ore. Cheia de semnare JWT este preluată din mediul de execuție prin variabila \texttt{JWT\_SECRET}. În absența acesteia, sistemul generează automat o cheie aleatorie per-proces și emite un avertisment la pornire, situație în care token-urile devin invalide la fiecare restartare a aplicației. De asemenea, canalul WebSocket de streaming necesită autentificare. Token-ul JWT este transmis ca parametru de interogare (\texttt{/ws?token=\dots}) și este revalidat constant față de baza de date, prevenind astfel accesul unui cont suspendat sau șters la fluxul live. Comunicația cu baza de date PostgreSQL se realizează prin credențiale dedicate, externalizate în variabile de mediu și izolate strict de datele utilizatorilor finali.
+    \item[NF3 -- Securitate.] Operațiile sensibile ale API-ului (precum gestiunea persoanelor, zonelor, plăcuțelor, utilizatorilor și configurarea modulelor AI) sunt protejate folosind o \textbf{autentificare bazată pe JWT} și restricționate printr-un \textbf{control de acces bazat pe roluri (RBAC)} cu nivelurile \texttt{admin} și \texttt{user}. Mai exact, acțiunile administrative sunt condiționate de dependența \texttt{require\_admin}, regulă aplicată și endpoint-urilor de control al camerelor. Parolele sunt stocate în format hash (folosind bcrypt), iar token-urile au un timp de viață limitat la 8~ore. Cheia de semnare JWT este preluată din mediul de execuție prin variabila \texttt{JWT\_SECRET}; în regim de producție (\texttt{APP\_ENV=production}) absența sau lungimea insuficientă a acestei chei oprește explicit pornirea aplicației (\emph{fail-fast}), fallback-ul cu o cheie aleatorie temporară fiind permis doar în dezvoltare. Sesiunile pot fi revocate instantaneu, înainte de expirarea celor 8~ore, printr-o \textbf{listă neagră} de token-uri (endpoint \texttt{/api/logout}). De asemenea, canalul WebSocket de streaming necesită autentificare. Token-ul JWT este transmis ca parametru de interogare (\texttt{/ws?token=\dots}) și este revalidat constant față de baza de date, prevenind astfel accesul unui cont suspendat sau șters la fluxul live. Comunicația cu baza de date PostgreSQL se realizează prin credențiale dedicate, externalizate în variabile de mediu și izolate strict de datele utilizatorilor finali.
 
     \item[NF4 -- Fiabilitate.] Indexul FAISS este reconstruit deterministic din PostgreSQL la fiecare pornire, astfel încât pierderea fișierului de index nu duce la pierderea datelor faciale. Pipeline-ul tolerează căderea temporară a unei camere fără a opri procesarea celorlalte fluxuri. Cozile de cadre folosesc politici de tipul \emph{drop-oldest} la saturare, astfel încât un detector lent să nu blocheze fluxul principal.
 
@@ -80,7 +80,7 @@ Cerințele nefuncționale stabilesc atributele de calitate sub care vor opera fu
 
     \item[NF8 -- Uzabilitate.] Interfața de utilizare este dezvoltată sub forma unei aplicații web \emph{responsive}, fiind accesibilă atât de pe stațiile de lucru fixe, cât și de pe dispozitive mobile pentru supravegherea de la distanță. Accesul în cadrul platformei este structurat pe roluri. Astfel, administratorul beneficiază de control complet asupra zonei de configurare și a gestiunii entităților, în timp ce operatorul utilizează interfața preponderent pentru vizualizarea fluxurilor video live și monitorizarea jurnalului de alarme.
 
-    \item[NF9 -- Portabilitate și mediu de execuție.] Backend-ul este scris în Python (FastAPI), iar inferența AI necesită GPU compatibil CUDA pentru ca \texttt{InsightFace} și celelalte modele să atingă latențele țintă; în absența unui provider CUDA disponibil, \texttt{onnxruntime} revine automat pe \texttt{CPUExecutionProvider}, sistemul rămânând funcțional, dar cu latențe semnificativ mai mari. Frontend-ul este o aplicație React standard, distribuibilă ca artefact static.
+    \item[NF9 -- Portabilitate și mediu de execuție.] Backend-ul este scris în Python (FastAPI), iar inferența AI necesită GPU compatibil CUDA pentru ca \texttt{InsightFace} și celelalte modele să atingă latențele țintă; în absența unui provider CUDA disponibil, \texttt{onnxruntime} revine automat pe \texttt{CPUExecution\linebreak Provider}, sistemul rămânând funcțional, dar cu latențe semnificativ mai mari. Frontend-ul este o aplicație React standard, distribuibilă ca artefact static.
 \end{description}
 
 \section{Cazuri de utilizare}
@@ -94,7 +94,7 @@ Sistemul distinge două roluri principale, mapate pe câmpul \texttt{role} al en
 
 \begin{itemize}
     \item \textbf{Administrator} -- responsabil de configurarea sistemului. Are acces complet la gestiunea entităților (persoane, plăcuțe, zone, camere, utilizatori), la activarea/dezactivarea modulelor AI și activarea/dezactivarea camerelor de supraveghere. Tot ceea ce ține de \emph{ce vede} sistemul și \emph{pe cine îl recunoaște} este responsabilitatea acestui actor.
-    \item \textbf{Utilizator obișnuit (Operator)} -- responsabil de supravegherea operațională. Vizualizează fluxurile live, monitorizează panoul de alarme, le triază și le marchează ca rezolvate și consultă jurnalele. Nu are dreptul să modifice configurația sistemului, să gestioneze entitățile sau să creeze conturi noi.
+    \item \textbf{Utilizator obișnuit} -- responsabil de supravegherea operațională. \linebreak Vizualizează fluxurile live, monitorizează panoul de alarme, le triază și le marchează ca rezolvate și consultă jurnalele. Nu are dreptul să modifice configurația sistemului, să gestioneze entitățile sau să creeze conturi noi.
 \end{itemize}
 
 Ambii actori partajează un set comun de cazuri de utilizare (autentificare, schimbare parolă, vizualizare live și consultare jurnale), pe lângă care li se atribuie privilegii specifice fiecărui rol. Suplimentar, platforma interacționează cu o serie de \emph{actori externi} pasivi, precum camerele IP, modelele AI și baza de date PostgreSQL. Deși nu reprezintă actori în sensul strict al modelării UML, aceste componente sunt esențiale și sunt tratate drept sisteme suport.
@@ -130,15 +130,15 @@ Figura~\ref{fig:usecase-detaliat} prezintă diagrama detaliată a cazurilor de u
 
     \item[UC6 -- Gestiune plăcuțe.] \textit{Actor:} Administrator. \textit{Scenariu:} Administratorul adaugă, modifică sau șterge datele aferente unei plăcuțe de înmatriculare (precizând numărul, tipul vehiculului, numele și ID-ul proprietarului, indicatorul \texttt{is\_authorized}, data de expirare și diverse note). Spre deosebire de profilurile persoanelor, plăcuțele nu presupun o autorizare la nivel de zonă. În schimb, un vehicul este considerat autorizat dacă numărul său de înmatriculare figurează în baza de date în momentul procesării OCR. \textit{Post-condiție:} Plăcuțele identificate sunt comparate cu înregistrările existente și \emph{jurnalizate} cu statusul \texttt{authorized} sau \texttt{unauthorized}. Suplimentar, o citire OCR validă pentru o plăcuță neautorizată declanșează automat o alarmă cu nivel de severitate \texttt{high} (conform UC10 și F7). \textit{Acoperă:} F3, F7, F8, F9.
 
-    \item[UC7 -- Adăugare/eliminare cameră.] \textit{Actor:} Administrator. \textit{Scenariu:} Administratorul adaugă o cameră IP nouă prin specificarea URL-ului de streaming, a unui identificator unic și a locației, având totodată opțiunea de a activa o cameră persistentă direct din baza de date \texttt{cameras-db}. Imediat după inițiere, backend-ul accesează fluxul video, lansează firul de execuție pentru captură și adaugă dispozitivul în lista camerelor active. Operația inversă, de eliminare a unei camere, va opri firul de execuție și va elibera resursele alocate. \textit{Post-condiție:} Camera devine vizibilă sau este retrasă automat din interfața de vizualizare de tip grid. \textit{Acoperă:} F1, F8.
+    \item[UC7 -- Adăugare/eliminare cameră.] \textit{Actor:} Administrator. \textit{Scenariu:} Administratorul adaugă o cameră IP nouă prin specificarea URL-ului de streaming, a unui identificator unic și a locației, având totodată opțiunea de a activa o cameră persistentă din configurația stocată în baza de date (\texttt{/api/cameras}). Imediat după inițiere, backend-ul accesează fluxul video, lansează firul de execuție pentru captură și adaugă dispozitivul în lista camerelor active. Operația inversă, de eliminare a unei camere, va opri firul de execuție și va elibera resursele alocate. \textit{Post-condiție:} Camera devine vizibilă sau este retrasă automat din interfața de vizualizare de tip grid. \textit{Acoperă:} F1, F8.
 
-    \item[UC8 -- Configurarea modulelor AI la runtime.]  \textit{Actor:} Administrator. \textit{Scenariu:} Administratorul accesează panoul \emph{Intelligence Settings} și activează sau dezactivează în mod individual modulele (recunoașterea facială, analiza demografică, citirea plăcuțelor, detecția focului, a armelor și a acțiunilor umane) utilizând endpoint-urile de tip \texttt{toggle}. Modificarea are efect imediat, fără repornirea backend-ului. Firul de execuție corespunzător începe sau încetează să mai pună cadre în coadă. \textit{Post-condiție:} pipeline-ul rulează cu noul set de detectoare active. \textit{Acoperă:} F7bis, NF5.
+    \item[UC8 -- Configurarea modulelor AI la runtime.]  \textit{Actor:} Administrator. \linebreak \textit{Scenariu:} Administratorul accesează panoul \emph{Intelligence Settings} și activează sau dezactivează în mod individual modulele (recunoașterea facială, analiza demografică, citirea plăcuțelor, detecția focului, a armelor și a acțiunilor umane) utilizând endpoint-urile de tip \texttt{toggle}. Modificarea are efect imediat, fără repornirea backend-ului. Firul de execuție corespunzător începe sau încetează să mai pună cadre în coadă. \textit{Post-condiție:} pipeline-ul rulează cu noul set de detectoare active. \textit{Acoperă:} F7bis, NF5.
 
     \item[UC9 -- Gestiune utilizatori.] \textit{Actor:} \textit{Actor:} Administrator. \textit{Scenariu:} Administratorul creează un cont nou, specificând numele, parola inițială și rolul asociat. Ulterior, acesta poate să modifice nivelul de acces atribuit sau să elimine conturi existente. \textit{Post-condiție:} setul de utilizatori autorizați să acceseze sistemul este actualizat. \textit{Acoperă:} F8, NF3.
 
     \item[UC10 -- Monitorizare alarme.] \textit{Actori:} Administrator, Operator. \textit{Pre-condiție:} pipeline-ul de procesare rulează și are detectoare active. \textit{Scenariu:} ori de câte ori se declanșează o detecție critică, backend-ul, după aplicarea cooldown-ului de deduplicare, salvează o alarmă în baza de date împreună cu o captură (snapshot). Clientul interoghează periodic endpoint-ul \texttt{/api/alarms} și afișează alarmele în panoul de alarme, cu severitatea, camera, timestamp-ul și captura asociată. \textit{Post-condiție:} alarma este vizibilă tuturor operatorilor. \textit{Acoperă:} F7, F2--F6, NF1.
 
-    \item[UC11 -- Rezolvare alarmă.] \textit{Actor:} Operator (sau Administrator). \textit{Pre-condiție:} Există cel puțin o alarmă activă în sistem. \textit{Scenariu:} Operatorul selectează o alarmă din panoul dedicat și o marchează drept rezolvată.  Backend-ul înregistrează identitatea utilizatorului care a acționat, alături de timestamp-ul aferent rezolvării. Această operațiune poate fi aplicată și în masă (\emph{bulk-update}) pentru a gestiona simultan un grup de alarme. \textit{Extinde:} UC10. \textit{Post-condiție:} Alarma vizată trece în starea \texttt{resolved} și este eliminată din vizualizarea alertelor active. \textit{Acoperă:} F7.
+    \item[UC11 -- Rezolvare alarmă.] \textit{Actor:} Operator (sau Administrator). \textit{Pre-condi-ție:} Există cel puțin o alarmă activă în sistem. \textit{Scenariu:} Operatorul selectează o alarmă din panoul dedicat și o marchează drept rezolvată.  Backend-ul înregistrează identitatea utilizatorului care a acționat, alături de timestamp-ul aferent rezolvării. Această operațiune poate fi aplicată și în masă (\emph{bulk-update}) pentru a gestiona simultan un grup de alarme. \textit{Extinde:} UC10. \textit{Post-condiție:} Alarma vizată trece în starea \texttt{resolved} și este eliminată din vizualizarea alertelor active. \textit{Acoperă:} F7.
 
     \item[UC12 -- Consultare jurnale și statistici.] \textit{Scenariu:} Procesul este împărțit în două direcții principale de acțiune. Pentru \emph{consultarea jurnalelor} (\textit{actori:} Administrator și Operator), utilizatorul accesează pagina dedicată și aplică filtre în funcție de intervalul de timp, cameră, tipul evenimentului, status și subiect. Backend-ul returnează rezultatele sub formă paginată, oferind totodată opțiunea de export în format CSV. Pentru \emph{vizualizarea statisticilor} (\textit{actor:} exclusiv Administrator), interfața afișează grafice agregate precum evoluția detecțiilor în timp, proporția fiecărui tip de eveniment și activitatea per cameră. \textit{Post-condiție:} Utilizatorul obține o perspectivă de ansamblu detaliată asupra activității sistemului pentru perioada selectată. \textit{Acoperă:} F9, F10.
 \end{description}
@@ -148,7 +148,7 @@ Tabelul de trasabilitate cerință\textrightarrow caz de utilizare se regăseșt
 \section{Arhitectura generală a sistemului}
 \label{sec:arhitectura_generala}
 
-După stabilirea cerințelor (\S\ref{sec:analiza_cerinte}) și a cazurilor de utilizare (\S\ref{sec:cazuri_utilizare}), această secțiune prezintă arhitectura sistemului la nivel macro, evidențiind structura fundamentală, descompunerea în componente logice și distribuția acestora pe noduri fizice. Detaliile interne ale pipeline-ului multi-threaded și ale interfețelor REST/WebSocket sunt amânate pentru Secțiunile~\ref{sec:pipeline_multithread}--\ref{sec:proiectare_websocket}.
+După stabilirea cerințelor (\S\ref{sec:analiza_cerinte}) și a cazurilor de utilizare (\S\ref{sec:cazuri_utilizare}), această secțiune prezintă arhitectura sistemului la nivel macro, evidențiind structura fundamentală, descompunerea în componente logice și distribuția acestora pe noduri fizice. Detaliile interne ale pipeline-ului multi-threaded și ale interfețelor REST/\linebreak WebSocket sunt amânate pentru Secțiunile~\ref{sec:pipeline_multithread}--\ref{sec:proiectare_websocket}.
 
 Sistemul este construit ca o aplicație web cu \textbf{trei straturi logice}: prezentare (clientul React), aplicație (backend-ul FastAPI cu pipeline-ul AI integrat) și persistență (baza de date PostgreSQL plus indexul FAISS reconstruit la pornire). Aceste straturi sunt utilizate de \textbf{cinci tipuri de actori tehnici}: utilizatorii umani prin browser, camerele video ca surse externe de date, modelele AI încărcate în memorie ca dependențe în proces, baza de date ca sistem suport și GPU-ul ca resursă de calcul. Alegerea unei arhitecturi monolitice pentru \linebreak backend, în care toate detectoarele rulează în același proces și partajează memoria GPU, este justificată în \S\ref{subsec:justificare_paralel}.
 
@@ -230,7 +230,7 @@ La nivel intern, backend-ul este descompus în următoarele componente logice. F
 
     \item[Modul AI.] Containerul pentru toate detectoarele specializate, încărcate o singură dată la pornire și partajate între fluxurile camerelor. Conține următoarele sub-module independente, fiecare cu propriul fir de execuție și propria pereche de cozi (\texttt{*\_processing\_queue} de intrare, \texttt{*\_results\_queue} de ieșire):
     \begin{itemize}
-        \item \texttt{facial\_recognition\_system} -- detecție de fețe (\textbf{InsightFace}), embedding-uri 512-d, căutare în FAISS, extragere atribute demografice (vârstă, gen prin InsightFace; emoție prin Mini-Xception/FER).
+        \item \texttt{facial\_recognition\_system} -- detecție de fețe (\textbf{InsightFace}), \linebreak embedding-uri 512-d, căutare în FAISS, extragere atribute demografice (vârstă, gen prin InsightFace; emoție prin Mini-Xception/FER).
         \item \texttt{license\_plate\_recognition\_system} -- detecție și OCR pe plăcuțe (\textbf{YOLOv8} pentru localizare + \textbf{EasyOCR} pentru text).
         \item \texttt{fire\_detection\_system} -- detector foc/fum cu \textbf{confirmare temporală} pe fereastră multi-cadru, pentru reducerea fals pozitivelor.
         \item \texttt{weapon\_detection\_system} -- detector \textbf{YOLOv8m} fine-tuned pe clasa unică \texttt{weapon}, antrenat pe Zenodo \emph{Dangerous Items} + Roboflow \emph{SOHAS}.
@@ -241,14 +241,14 @@ La nivel intern, backend-ul este descompus în următoarele componente logice. F
 
     \item[Modul de control al accesului.] Cache-urile \texttt{\_person\_zones\_cache} și \linebreak\texttt{\_camera\_zone\_cache} și logica asociată din \texttt{app.py} verifică, pentru fiecare \emph{persoană} identificată, dacă aceasta are dreptul de acces în zona asociată camerei (comparând zona camerei cu lista \texttt{authorized\_zones} a persoanei). Cache-urile sunt reîmprospătate periodic (TTL) și forțat la modificarea entităților relevante. Plăcuțele nu participă la acest mecanism, autorizarea lor fiind globală (\S\ref{subsec:cerinte_functionale}).
 
-    \item[API REST.] Stratul de controlere FastAPI definit în \texttt{app.py}, organizat pe domenii: \texttt{/api/login}, \texttt{/api/persons}, \texttt{/api/plates}, \texttt{/api/zones}, \linebreak\texttt{/api/cameras-db}, \texttt{/api/users}, \texttt{/api/logs}, \texttt{/api/alarms}, \linebreak \texttt{/api/statistics}, plus endpoint-urile \texttt{toggle} pentru fiecare modul AI. Fiecare controler validează token-ul JWT, aplică verificarea de rol și deleagă efectiv către modulele de business sau către \texttt{database\_manager.py}.
+    \item[API REST.] Stratul de controlere FastAPI definit în \texttt{app.py}, organizat pe domenii: \texttt{/api/login}, \texttt{/api/persons}, \texttt{/api/plates}, \texttt{/api/zones}, \linebreak\texttt{/api/cameras}, \texttt{/api/users}, \texttt{/api/logs}, \texttt{/api/alarms}, \linebreak \texttt{/api/stats}, plus endpoint-urile \texttt{toggle} pentru fiecare modul AI. Fiecare controler validează token-ul JWT, aplică verificarea de rol și deleagă efectiv către modulele de business sau către \texttt{database\_manager.py}.
 
     \item[Gestiunea WebSocket.] Endpoint-ul \texttt{/ws} autentifică clientul (token JWT ca parametru de interogare) și îi alocă o \textbf{coadă proprie} (\texttt{queue.Queue}), înregistrată în dicționarul \texttt{client\_queues}; modulul de fuziune nu publică într-o coadă partajată, ci difuzează fiecare cadru procesat către coada fiecărui client prin metoda \texttt{\_broadcast\_frame} (politică \emph{drop-oldest} per client, astfel încât un client lent să-și piardă doar propriile cadre vechi). Mesajele difuzate (câmpul \texttt{type}: \texttt{video\_frame}) conțin cadrul codificat (JPEG la calitate 75, redimensionat la maxim 800~px lățime, Base64), rezultatele detectoarelor pe câmpuri separate (\texttt{face\_results}, \texttt{plate\_results}, etc.) și starea modulelor (flag-urile \texttt{*\_enabled}). Comunicarea este \emph{strict unidirecțională} (server$\to$client): handler-ul doar trimite cadre, fără a citi mesaje de la client. Alarmele nu sunt transmise prin acest canal, ci preluate separat prin REST (\S\ref{sec:proiectare_websocket}).
 
     \item[Layer de persistență.] Modulul \texttt{database\_manager.py} centralizează toate \linebreak accesele la PostgreSQL printr-o conexiune \texttt{psycopg2} persistentă \linebreak (cu \texttt{RealDictCursor}), oferind operații CRUD și interogări parametrizate pentru toate entitățile. Indexul FAISS, deși tehnic în memoria procesului, este considerat parte a acestui layer pentru că este reconstruit din DB. Datele binare sunt păstrate tot în baza de date: embedding-urile faciale ca \texttt{BYTEA} în \texttt{face\_embeddings}, iar capturile de alarmă (snapshot-urile) ca șiruri Base64 în coloana \texttt{snapshot} a tabelei \texttt{alarms}. Sistemul nu expune un serviciu de fișiere statice.
 \end{description}
 
-Cuplajul între componente este slab: fiecare detector poate fi activat/dezactivat independent (vezi UC8) fără a afecta restul, iar adăugarea unui nou detector se reduce la implementarea aceleiași interfețe (\emph{intrare:} cadru, \emph{ieșire:} listă de detecții) și conectarea unui nou fir cu cozile sale.
+Cuplajul între componente este slab: fiecare detector poate fi activat/dezacti-vat independent (vezi UC8) fără a afecta restul, iar adăugarea unui nou detector se reduce la implementarea aceleiași interfețe (\emph{intrare:} cadru, \emph{ieșire:} listă de detecții) și conectarea unui nou fir cu cozile sale.
 
 \clearpage
 
@@ -322,7 +322,7 @@ Backend-ul pornește, la inițializarea instanței \texttt{EnhancedSurveillanceS
 
 \subsubsection{Firul 1 -- Captura video}
 
-Firul \texttt{CaptureThread} citește ciclic câte un cadru de la fiecare cameră activă prin \texttt{cv2.VideoCapture.read()}, cu reconectare automată a camerelor IP căzute. Fiecare cadru primește un \texttt{frame\_id} monoton crescător și, sub rezerva unui mecanism de \emph{frame-skip} (se procesează un cadru la fiecare \texttt{frame\_skip}), este transmis metodei \texttt{\_dispatch\_frame}. Aceasta depune, pentru fiecare detector activ, o \emph{copie} a cadrului (\texttt{frame.copy()}) în coada de procesare corespunzătoare (\texttt{face\_processing\_queue}, \texttt{plate\_processing\_queue}, \texttt{fire\_processing\_queue}, \texttt{har\_processing\_queue}, \texttt{weapon\_processing\_queue}) și, doar dacă toate cozile detectoarelor active au acceptat cadrul, o copie în \texttt{raw\_frame\_queue}, folosită de fuziune ca \emph{fallback} pentru cadrele pentru care nu au sosit încă rezultatele detectoarelor.
+Firul \texttt{CaptureThread} citește ciclic câte un cadru de la fiecare cameră activă prin \texttt{cv2.VideoCapture.read()}, cu reconectare automată a camerelor IP căzute. Fiecare cadru primește un \texttt{frame\_id} monoton crescător și, sub rezerva unui mecanism de \emph{frame-skip} (se procesează un cadru la fiecare \texttt{frame\_skip}), este transmis metodei \texttt{\_dispatch\_frame}. Aceasta depune, pentru fiecare detector activ, o \emph{copie} a cadrului (\texttt{frame.copy()}) în coada de procesare corespunzătoare (\texttt{face\_processing\_queue}, \texttt{plate\_processing\_queue}, \texttt{fire\_processing\_\linebreak queue}, \texttt{har\_processing\_queue}, \texttt{weapon\_processing\_queue}) și, doar dacă toate cozile detectoarelor active au acceptat cadrul, o copie în \texttt{raw\_frame\_queue}, folosită de fuziune ca \emph{fallback} pentru cadrele pentru care nu au sosit încă rezultatele detectoarelor.
 
 \subsubsection{Firul 2 -- Recunoaștere facială și analiză demografică}
 
@@ -350,7 +350,7 @@ Firul \texttt{MergingThread} este nucleul de agregare: consumă neblocant din to
 
 \subsubsection{Justificarea separării}
 
-Alocarea pe fire respectă două principii: \textbf{omogenitatea computațională} (operații care partajează intrarea și cache-ul GPU stau împreună -- ex.\ recunoaștere facială cu demografie, detecție plăcuță cu OCR) și \textbf{izolarea costului și a cadenței} (firul cel mai costisitor pe cadru -- recunoașterea facială cu demografie, $\sim$83~ms -- și firul cu cadență de clip -- HAR -- rămân separate, ca să nu impună latența, respectiv ritmul lor, celorlalte detectoare). Numărul 7 nu este un obiectiv în sine, ci o consecință a celor cinci familii de detecții cerute plus capătul de pipeline (captură) și nucleul de agregare (fuziune).
+Alocarea pe fire respectă două principii: \textbf{omogenitatea computațională} (operații care partajează intrarea și cache-ul GPU stau împreună -- ex.\ recunoaște-re facială cu demografie, detecție plăcuță cu OCR) și \textbf{izolarea costului și a cadenței} (firul cel mai costisitor pe cadru -- recunoașterea facială cu demografie, $\sim$83~ms -- și firul cu cadență de clip -- HAR -- rămân separate, ca să nu impună latența, respectiv ritmul lor, celorlalte detectoare). Numărul 7 nu este un obiectiv în sine, ci o consecință a celor cinci familii de detecții cerute plus capătul de pipeline (captură) și nucleul de agregare (fuziune).
 
 \subsection{Mecanismele de sincronizare}
 \label{subsec:sincronizare}
@@ -437,30 +437,31 @@ O variantă și mai distribuită ar fi un detector per proces (sau per container
 
 Toate operațiile tranzacționale ale sistemului (precum autentificarea, operațiile de tip CRUD asupra entităților, interogarea jurnalelor și a statisticilor, alături de controlul modulelor AI) sunt expuse prin intermediul unui API REST. Acesta este dezvoltat utilizând framework-ul FastAPI și este montat sub prefixul comun \texttt{/api}. Acest canal de comunicare este complementar protocolului WebSocket (detaliat în \S\ref{sec:proiectare_websocket}). Mai exact, API-ul REST deservește cereri punctuale, sincrone, bazate pe paradigma cerere-răspuns, în timp ce conexiunea WebSocket este dedicată transmiterii fluxului continuu de cadre video și alerte. Prezenta secțiune detaliază endpoint-urile disponibile (grupate pe categorii de funcționalități), convențiile de denumire adoptate, formatul standardizat al răspunsurilor și codurile HTTP de eroare utilizate.
 
-\subsubsection{Convenții de denumire}
+\subsection{Convenții de denumire}
 
-API-ul respectă, în linii mari, convențiile REST: substantive la plural pentru colecții (\texttt{/api/persons}, \texttt{/api/zones}), identificatorul resursei ca segment de cale (\texttt{/api/persons/\{person\_id\}}), iar verbul HTTP exprimă acțiunea (\texttt{GET} pentru citire, \texttt{POST} pentru creare, \texttt{PUT} pentru actualizare completă, \texttt{PATCH} pentru actualizare parțială, \texttt{DELETE} pentru ștergere). Sub-resursele și acțiunile derivate sunt exprimate ca segmente suplimentare (\texttt{/api/persons/\{person\_id\}/faces}, \texttt{/api/persons/\{person\_id\}/access-history}).
+API-ul respectă consecvent convențiile REST: substantive la plural pentru colecții (\texttt{/api/persons}, \texttt{/api/zones}, \texttt{/api/plates}, \texttt{/api/cameras}, \texttt{/api/streams}, \linebreak \texttt{/api/users}), identificatorul resursei ca segment de cale (\texttt{/api/persons/\{person\linebreak \_id\}}), iar verbul HTTP exprimă acțiunea (\texttt{GET} pentru citire, \texttt{POST} pentru creare, \texttt{PUT} pentru actualizare completă, \texttt{PATCH} pentru actualizare parțială, \texttt{DELETE} pentru ștergere). Sub-resursele și acțiunile derivate sunt exprimate ca segmente suplimentare (\texttt{/api/persons/\{person\_id\}/faces}, \texttt{/api/persons/\{person\_id\}\linebreak/access-history}).
 
-Trebuie semnalat onest că denumirile \emph{nu} sunt perfect uniforme, fiind rezultatul unei dezvoltări iterative: controlul camerelor în timp real folosește singularul (\texttt{/api/camera/start}), în timp ce camerele persistate folosesc pluralul cu sufix (\texttt{/api/cameras-db}); alarmele sunt expuse sub \texttt{/api/alarms} (nu \texttt{/alerts}), iar statisticile sub \texttt{/api/statistics} (nu \texttt{/stats}). Aceste abateri sunt documentate ca atare și reprezintă o țintă naturală de refactorizare pentru o versiune \texttt{v2} a API-ului.
+Cele două aspecte legate de camere sunt modelate ca resurse distincte, ambele denumite la plural. Fluxurile video procesate în timp real sunt expuse ca resursa \texttt{/api/streams}: un \texttt{POST} pornește un flux, un \texttt{GET} le listează pe cele active, iar un \texttt{DELETE} oprește un flux individual sau toate fluxurile. Configurațiile de camere persistate în baza de date sunt expuse separat, ca resursa \texttt{/api/cameras}. În același spirit, statisticile agregate folosesc consecvent sufixul \texttt{stats} -- \texttt{/api/stats} la nivel de sistem, respectiv \texttt{/api/alarms/stats}, \texttt{/api/logs/stats}, \texttt{/api/har/stats} și \texttt{/api/weapon/stats} la nivel de modul -- iar alarmele sunt grupate sub \texttt{/api/alarms}.
 
-\subsubsection{Catalogul endpoint-urilor pe categorii}
+\subsection{Catalogul endpoint-urilor pe categorii}
 
 \paragraph*{Autentificare.}
 \begin{itemize}
     \item \texttt{POST /api/login} -- autentifică un utilizator (nume + parolă) și returnează un token JWT plus datele de profil.
+    \item \texttt{POST /api/logout} -- revocă token-ul curent (logout efectiv): \texttt{jti}-ul acestuia este înscris în lista neagră \texttt{revoked\_tokens}, devenind invalid imediat, înainte de expirarea naturală.
 \end{itemize}
 
-\paragraph*{Stare și control camere (runtime).}
+\paragraph*{Stare și control fluxuri video (runtime).}
 \begin{itemize}
     \item \texttt{GET /api/status} -- starea curentă a sistemului: streaming activ per cameră, ce module AI sunt pornite, statistici de performanță.
-    \item \texttt{POST /api/camera/start}, \texttt{POST /api/camera/stop}, \texttt{POST /api/camera/stop-all} -- pornesc/opresc camera locală sau toate camerele.
-    \item \texttt{POST /api/camera/add-ip}, \texttt{POST /api/camera/remove-ip} -- adaugă/elimină dinamic o cameră IP prin URL.
-    \item \texttt{GET /api/cameras/list} -- lista camerelor active în memorie.
+    \item \texttt{POST /api/streams} -- pornește un flux video; corpul cererii selectează sursa: \texttt{"local"} pentru camera laptopului (id-ul rezervat \texttt{CAM-01}) sau \texttt{"ip"} împreună cu URL-ul, id-ul și locația unei camere IP.
+    \item \texttt{GET /api/streams} -- listează fluxurile active (camera locală + camerele IP).
+    \item \texttt{DELETE /api/streams/\{camera\_id\}} -- oprește un flux individual; \texttt{DELETE /api/streams} -- oprește toate fluxurile.
 \end{itemize}
 
 \paragraph*{Control module AI (toggle).}
 \begin{itemize}
-    \item \texttt{POST /api/face/toggle}, \texttt{/api/plate/toggle}, \texttt{/api/demographics/toggle}, \texttt{/api/fire/toggle}, \texttt{/api/har/toggle}, \texttt{/api/weapon/toggle} -- activează/dezactivează individual fiecare detector (cerința F7bis).
+    \item \texttt{POST /api/face/toggle}, \texttt{/api/plate/toggle}, \texttt{/api/demographics/toggle}, \texttt{/api/fire/toggle}, \texttt{/api/har/toggle}, \texttt{/api/weapon/toggle} -- activează/\linebreak dezactivează individual fiecare detector (cerința F7bis).
     \item \texttt{GET /api/har/stats}, \texttt{GET /api/weapon/stats} -- statistici interne ale celor două detectoare.
 \end{itemize}
 
@@ -475,8 +476,8 @@ Trebuie semnalat onest că denumirile \emph{nu} sunt perfect uniforme, fiind rez
 
 \paragraph*{Plăcuțe de înmatriculare.}
 \begin{itemize}
-    \item \texttt{POST /api/plates/register}; \texttt{GET /api/plates}; \texttt{GET /api/plates/vehicle-types}.
-    \item \texttt{GET\,|\,PUT\,|\,DELETE /api/plates/\{plate\_number\}}; \texttt{GET /api/plates/\{plate\_number\}/access-history}.
+    \item \texttt{POST /api/plates/register}; \texttt{GET /api/plates}; \texttt{GET /api/plates/vehicle-\linebreak types}.
+    \item \texttt{GET\,|\,PUT\,|\,DELETE /api/plates/\{plate\_number\}}; \texttt{GET /api/plates/\{plate\_\linebreak number\} /access-history}.
 \end{itemize}
 
 \paragraph*{Zone.}
@@ -486,7 +487,7 @@ Trebuie semnalat onest că denumirile \emph{nu} sunt perfect uniforme, fiind rez
 
 \paragraph*{Camere (persistate în baza de date).}
 \begin{itemize}
-    \item \texttt{GET /api/cameras-db}; \texttt{POST /api/cameras-db}; \texttt{PUT\,|\,DELETE /api/cameras-db/\{camera\_id\}}.
+    \item \texttt{GET /api/cameras}; \texttt{POST /api/cameras}; \texttt{PUT\,|\,DELETE /api/cameras/\{\linebreak camera\_id\}}.
 \end{itemize}
 
 \paragraph*{Alarme.}
@@ -504,7 +505,7 @@ Trebuie semnalat onest că denumirile \emph{nu} sunt perfect uniforme, fiind rez
 
 \paragraph*{Statistici.}
 \begin{itemize}
-    \item \texttt{GET /api/statistics} -- metrici agregate la nivel de sistem.
+    \item \texttt{GET /api/stats} -- metrici agregate la nivel de sistem.
 \end{itemize}
 
 \paragraph*{Utilizatori.}
@@ -513,11 +514,110 @@ Trebuie semnalat onest că denumirile \emph{nu} sunt perfect uniforme, fiind rez
     \item \texttt{PUT /api/users/me/password} -- schimbarea parolei contului propriu.
 \end{itemize}
 
-\textit{[Diagramă: \textbf{tabel} (nu diagramă) care rezumă, pe coloane, fiecare endpoint cu: metodă HTTP, cale, rol minim necesar (oricine autentificat / admin) și cerința \texttt{F\textit{x}} acoperită. Recomand un \texttt{longtable} întins pe categoriile de mai sus, plasat aici. Alternativ, o reprezentare a ierarhiei de resurse poate fi inclusă ca diagramă-arbore.]}
+Tabelul~\ref{tab:catalog_endpointuri} sintetizează catalogul complet, indicând pentru fiecare endpoint metoda HTTP, calea, rolul minim necesar -- \texttt{Public} (fără autentificare), \texttt{Autentificat} (orice utilizator cu token JWT valid) sau \texttt{Admin} (rol privilegiat) -- și cerința funcțională \texttt{F\textit{x}} pe care o deservește. Distincția de rol este impusă la nivel de backend prin dependențele FastAPI \inlinecode{get\_current\_user} (autentificare) și \inlinecode{require\_admin} (autorizare de tip administrator).
 
-\subsubsection{Structura răspunsurilor}
+{\footnotesize
+\setlength{\LTleft}{0pt}
+\setlength{\LTright}{0pt}
+\begin{xltabular}{\textwidth}{@{}l >{\raggedright\arraybackslash}X l l@{}}
+\caption{Catalogul endpoint-urilor REST: metodă HTTP, cale, rol minim necesar și cerința funcțională acoperită.}
+\label{tab:catalog_endpointuri}\\
+\hline
+\textbf{Metodă} & \textbf{Cale} & \textbf{Rol minim} & \textbf{Cerință} \\
+\hline
+\endfirsthead
+\multicolumn{4}{l}{{\footnotesize\itshape \dots\ continuare a Tabelului~\ref{tab:catalog_endpointuri}}}\\
+\hline
+\textbf{Metodă} & \textbf{Cale} & \textbf{Rol minim} & \textbf{Cerință} \\
+\hline
+\endhead
+\hline
+\multicolumn{4}{r}{{\footnotesize\itshape continuă pe pagina următoare\dots}}\\
+\endfoot
+\hline
+\endlastfoot
+\multicolumn{4}{@{}l}{\textbf{Autentificare}}\\
+\texttt{POST}   & \texttt{/api/login} & Public & -- \\
+\texttt{POST}   & \texttt{/api/logout} & Autentificat & -- \\
+\hline
+\multicolumn{4}{@{}l}{\textbf{Stare și control fluxuri video (runtime)}}\\
+\texttt{GET}    & \texttt{/api/status} & Autentificat & F1 \\
+\texttt{POST}   & \texttt{/api/streams} & Admin & F1 \\
+\texttt{GET}    & \texttt{/api/streams} & Autentificat & F1 \\
+\texttt{DELETE} & \texttt{/api/streams/\{camera\_id\}} & Admin & F1 \\
+\texttt{DELETE} & \texttt{/api/streams} & Admin & F1 \\
+\hline
+\multicolumn{4}{@{}l}{\textbf{Control module AI (toggle)}}\\
+\texttt{POST}   & \texttt{/api/face/toggle} & Admin & F7bis \\
+\texttt{POST}   & \texttt{/api/plate/toggle} & Admin & F7bis \\
+\texttt{POST}   & \texttt{/api/demographics/toggle} & Admin & F7bis \\
+\texttt{POST}   & \texttt{/api/fire/toggle} & Admin & F7bis \\
+\texttt{POST}   & \texttt{/api/har/toggle} & Admin & F7bis \\
+\texttt{POST}   & \texttt{/api/weapon/toggle} & Admin & F7bis \\
+\texttt{GET}    & \texttt{/api/har/stats} & Autentificat & F6 \\
+\texttt{GET}    & \texttt{/api/weapon/stats} & Autentificat & F5 \\
+\hline
+\multicolumn{4}{@{}l}{\textbf{Persoane}}\\
+\texttt{POST}   & \texttt{/api/persons/register} & Admin & F8 \\
+\texttt{GET}    & \texttt{/api/persons} & Admin & F8 \\
+\texttt{GET}    & \texttt{/api/persons/departments} & Admin & F8 \\
+\texttt{GET}    & \texttt{/api/persons/\{person\_id\}} & Admin & F8 \\
+\texttt{PUT}    & \texttt{/api/persons/\{person\_id\}} & Admin & F8 \\
+\texttt{DELETE} & \texttt{/api/persons/\{person\_id\}} & Admin & F8 \\
+\texttt{POST}   & \texttt{/api/persons/\{person\_id\}/faces} & Admin & F2 \\
+\texttt{GET}    & \texttt{/api/persons/\{person\_id\}/access-history} & Admin & F9 \\
+\hline
+\multicolumn{4}{@{}l}{\textbf{Plăcuțe de înmatriculare}}\\
+\texttt{POST}   & \texttt{/api/plates/register} & Admin & F8 \\
+\texttt{GET}    & \texttt{/api/plates} & Admin & F8 \\
+\texttt{GET}    & \texttt{/api/plates/vehicle-types} & Admin & F8 \\
+\texttt{GET}    & \texttt{/api/plates/\{plate\_number\}} & Admin & F8 \\
+\texttt{PUT}    & \texttt{/api/plates/\{plate\_number\}} & Admin & F8 \\
+\texttt{DELETE} & \texttt{/api/plates/\{plate\_number\}} & Admin & F8 \\
+\texttt{GET}    & \texttt{/api/plates/\{plate\_number\}/access-history} & Admin & F9 \\
+\hline
+\multicolumn{4}{@{}l}{\textbf{Zone}}\\
+\texttt{GET}    & \texttt{/api/zones} & Autentificat & F8 \\
+\texttt{POST}   & \texttt{/api/zones} & Admin & F8 \\
+\texttt{PUT}    & \texttt{/api/zones/\{zone\_id\}} & Admin & F8 \\
+\texttt{DELETE} & \texttt{/api/zones/\{zone\_id\}} & Admin & F8 \\
+\hline
+\multicolumn{4}{@{}l}{\textbf{Camere (persistate în baza de date)}}\\
+\texttt{GET}    & \texttt{/api/cameras} & Autentificat & F8 \\
+\texttt{POST}   & \texttt{/api/cameras} & Admin & F8 \\
+\texttt{PUT}    & \texttt{/api/cameras/\{camera\_id\}} & Admin & F8 \\
+\texttt{DELETE} & \texttt{/api/cameras/\{camera\_id\}} & Admin & F8 \\
+\hline
+\multicolumn{4}{@{}l}{\textbf{Alarme}}\\
+\texttt{GET}    & \texttt{/api/alarms} & Autentificat & F7 \\
+\texttt{GET}    & \texttt{/api/alarms/stats} & Autentificat & F7, F10 \\
+\texttt{GET}    & \texttt{/api/alarms/\{alarm\_id\}} & Autentificat & F7 \\
+\texttt{PATCH}  & \texttt{/api/alarms/\{alarm\_id\}} & Autentificat & F7 \\
+\texttt{POST}   & \texttt{/api/alarms/bulk-update} & Autentificat & F7 \\
+\hline
+\multicolumn{4}{@{}l}{\textbf{Jurnale}}\\
+\texttt{GET}    & \texttt{/api/logs} & Autentificat & F9 \\
+\texttt{GET}    & \texttt{/api/logs/vehicle} & Autentificat & F9 \\
+\texttt{GET}    & \texttt{/api/logs/stats} & Autentificat & F10 \\
+\texttt{GET}    & \texttt{/api/logs/timeseries} & Autentificat & F10 \\
+\texttt{GET}    & \texttt{/api/logs/breakdown} & Autentificat & F10 \\
+\texttt{GET}    & \texttt{/api/logs/export} & Autentificat & F9 \\
+\hline
+\multicolumn{4}{@{}l}{\textbf{Statistici}}\\
+\texttt{GET}    & \texttt{/api/stats} & Autentificat & F10 \\
+\hline
+\multicolumn{4}{@{}l}{\textbf{Utilizatori}}\\
+\texttt{GET}    & \texttt{/api/users} & Admin & F8 \\
+\texttt{POST}   & \texttt{/api/users} & Admin & F8 \\
+\texttt{PUT}    & \texttt{/api/users/\{user\_id\}} & Admin & F8 \\
+\texttt{DELETE} & \texttt{/api/users/\{user\_id\}} & Admin & F8 \\
+\texttt{PUT}    & \texttt{/api/users/me/password} & Autentificat & F8 \\
+\end{xltabular}
+}
 
-Răspunsurile sunt codificate JSON. Pentru operațiile de comandă (POST/PUT/PATCH/DELETE) se folosește o anvelopă consistentă cu un câmp \texttt{status} care ia valorile \texttt{"success"}, \texttt{"info"} sau \texttt{"error"}, însoțit de un câmp \texttt{message} explicativ:
+\subsection{Structura răspunsurilor}
+
+Răspunsurile sunt codificate JSON. Pentru operațiile de comandă (POST, PUT, \linebreak PATCH, DELETE), \emph{payload}-ul utilizează o structură standardizată, compusă dintr-un câmp \texttt{status} (cu valorile \texttt{"success"}, \texttt{"info"} sau \texttt{"error"}), însoțit de un câmp \texttt{message} explicativ:
 
 \begin{verbatim}
 { "status": "success", "message": "Camera started" }
@@ -532,9 +632,9 @@ Răspunsul de autentificare adaugă token-ul și profilul utilizatorului:
             "role": "admin", "full_name": "..." } }
 \end{verbatim}
 
-Pentru operațiile de citire (GET), răspunsul este fie obiectul/colecția cerută direct, fie aceeași anvelopă cu datele atașate. Un detaliu de implementare relevant: toate răspunsurile trec printr-o funcție \texttt{convert\_to\_serializable} care convertește tipurile NumPy (\texttt{np.integer}, \texttt{np.floating}, \texttt{np.ndarray}) -- frecvente în rezultatele modelelor AI -- în tipuri native Python serializabile JSON, evitând erorile de serializare.
+Pentru operațiile de citire (GET), răspunsul constă fie direct în obiectul sau colecția solicitată, fie în aceeași structură standardizată a \emph{payload}-ului, care integrează datele cerute. Un detaliu relevant de implementare este faptul că toate răspunsurile sunt procesate prin intermediul funcției \texttt{convert\_to\_serializable}. Aceasta convertește tipurile de date NumPy (\texttt{np.integer}, \texttt{np.floating}, \linebreak \texttt{np.ndarray}), des întâlnite în ieșirile modelelor AI, în tipuri native Python compatibile cu formatul JSON, prevenind astfel erorile de serializare.
 
-\subsubsection{Coduri de eroare}
+\subsection{Coduri de eroare}
 
 API-ul folosește codurile de stare HTTP standard, ridicate prin \texttt{HTTPException} din FastAPI:
 
@@ -547,20 +647,22 @@ API-ul folosește codurile de stare HTTP standard, ridicate prin \texttt{HTTPExc
     \item \textbf{500 Internal Server Error} -- excepții neașteptate (ex.\ eșecul deschiderii unei camere), capturate în handler și raportate cu \texttt{detail=str(e)}.
 \end{itemize}
 
-Corpul unei erori urmează formatul standard FastAPI, \texttt{\{"detail": "<mesaj>"\}}, ceea ce permite frontend-ului să afișeze direct mesajul în interfața în limba română.
+Corpul unei erori urmează formatul standard FastAPI, \texttt{\{"detail": \linebreak "<mesaj>"\}}, ceea ce permite frontend-ului să afișeze direct mesajul în interfața.
 
 \section{Proiectarea canalului WebSocket}
 \label{sec:proiectare_websocket}
 
 Dacă API-ul REST (\S\ref{sec:api_rest}) servește cereri punctuale, canalul WebSocket este responsabil de fluxul continuu de date în timp real: cadrele video procesate, adnotate cu rezultatele detectoarelor, sunt împinse de la server către toți clienții conectați. Această secțiune descrie endpoint-ul dedicat, formatul mesajelor (verificat direct în implementarea din \texttt{app.py}), cadența de transmitere și modul în care sunt tratate deconectarea și reconectarea.
 
-\subsubsection{Endpoint dedicat pentru streaming}
+\subsection{Endpoint dedicat pentru streaming}
 
-Există un singur endpoint WebSocket, montat la \texttt{/ws}. La conectare, serverul \emph{autentifică mai întâi} clientul -- token-ul JWT este transmis ca parametru de interogare (\texttt{/ws?token=\dots}, deoarece browserele nu pot seta antete pe un WebSocket), este decodat și re-verificat față de baza de date, iar conexiunea este refuzată (cod de închidere 1008) dacă token-ul lipsește, este invalid/expirat sau aparține unui cont șters. Doar după validare serverul acceptă handshake-ul (\texttt{await websocket.accept()}) și alocă fiecărui client o \textbf{coadă proprie} (\texttt{queue.Queue}), înregistrată în dicționarul \texttt{client\_queues}. Modelul este \textbf{broadcast unu-la-mulți}: firul de fuziune (\S\ref{subsec:fire_executie}) nu publică într-o coadă partajată, ci difuzează fiecare cadru, prin metoda \texttt{\_broadcast\_frame}, în coada fiecărui client; bucla fiecărui client consumă din coada sa și trimite mesajul mai departe. Comunicarea este predominant unidirecțională, server$\to$client; clientul nu trebuie să trimită nimic pentru a primi fluxul.
+Există un singur endpoint WebSocket, montat la \texttt{/ws}. La conectare, serverul autentifică mai întâi clientul -- token-ul JWT este transmis ca parametru de interogare (\texttt{/ws?token=\dots}, deoarece browserele nu pot seta antete pe un WebSocket), este decodat și re-verificat față de baza de date, iar conexiunea este refuzată (cod de închidere 1008) dacă token-ul lipsește, este invalid/expirat sau aparține unui cont șters. Doar după validare serverul acceptă handshake-ul (\texttt{await websocket.accept()}) și alocă fiecărui client o \textbf{coadă proprie} (\texttt{queue.Queue}), înregistrată în dicționarul \texttt{client\_queues}. Modelul este \textbf{broadcast unu-la-mulți}: firul de fuziune (\S\ref{subsec:fire_executie}) nu publică într-o coadă partajată, ci difuzează fiecare cadru, prin metoda \texttt{\_broadcast\_frame}, în coada fiecărui client; bucla fiecărui client consumă din coada sa și trimite mesajul mai departe. Comunicarea este predominant unidirecțională, server$\to$client; clientul nu trebuie să trimită nimic pentru a primi fluxul.
 
-\subsubsection{Formatul mesajelor}
+\subsection{Formatul mesajelor}
 
 Fiecare mesaj este un obiect JSON serializat cu \texttt{json.dumps} și trimis prin \texttt{send\_text}. Mesajul de tip cadru video are următoarea structură (construită în metoda \texttt{\_encode\_and\_queue\_frame}):
+
+\clearpage
 
 \begin{verbatim}
 {
@@ -580,73 +682,89 @@ Fiecare mesaj este un obiect JSON serializat cu \texttt{json.dumps} și trimis p
 }
 \end{verbatim}
 
-Câmpul \texttt{frame} conține cadrul adnotat (cu bounding box-uri și etichete deja desenate de modulul de fuziune), codificat \textbf{JPEG la calitate 75} și apoi \textbf{Base64}. Pentru a reduce volumul transmis, cadrul este redimensionat la o lățime maximă de 800~px înainte de codificare. Trebuie precizat -- pentru concordanță cu codul -- că rezultatele detecțiilor \emph{nu} sunt grupate într-un singur câmp \texttt{detections}, ci în \textbf{câmpuri separate per detector} (\texttt{face\_results}, \texttt{plate\_results}, \texttt{fire\_results}, \texttt{har\_results}, \texttt{weapon\_results}); fiecare este o listă de obiecte cu structură specifică detectorului (de exemplu, un rezultat facial conține \texttt{name}, \texttt{confidence}, \texttt{bbox}, \texttt{age}, \texttt{gender}, \texttt{emotion}). Câmpurile booleene \texttt{*\_enabled} comunică frontend-ului ce module sunt active, astfel încât interfața să poată ascunde/afișa straturile corespunzătoare. Toate valorile trec prin \texttt{convert\_to\_serializable} pentru a transforma tipurile NumPy în tipuri native serializabile JSON.
+Câmpul \texttt{frame} conține cadrul adnotat (cu bounding box-uri și etichete deja desenate de modulul de fuziune), codificat \textbf{JPEG la calitate 75} și apoi \textbf{Base64}. Pentru a reduce volumul transmis, cadrul este redimensionat la o lățime maximă de 800~px înainte de codificare. Trebuie precizat că rezultatele detecțiilor nu sunt grupate într-un singur câmp \texttt{detections}, ci în \textbf{câmpuri separate per detector} (\texttt{face\_results}, \texttt{plate\_results}, \texttt{fire\_results}, \texttt{har\_results}, \texttt{weapon\_results}); fiecare este o listă de obiecte cu structură specifică detectorului (de exemplu, un rezultat facial conține \texttt{name}, \texttt{confidence}, \texttt{bbox}, \texttt{age}, \texttt{gender}, \texttt{emotion}). Câmpurile booleene \texttt{*\_enabled} comunică frontend-ului ce module sunt active, astfel încât interfața să poată ascunde/afișa straturile corespunzătoare. Toate valorile trec prin \texttt{convert\_to\_serializable} pentru a transforma tipurile NumPy în tipuri native serializabile JSON.
 
-Alarmele \emph{nu} sunt transmise printr-un tip de mesaj WebSocket separat; ele sunt persistate în baza de date și consultate de client prin endpoint-urile REST \texttt{/api/alarms} (\S\ref{sec:api_rest}). Captura asociată unei alarme (snapshot) este codificată tot JPEG+Base64, la calitate 60, în momentul declanșării.
+Alarmele nu sunt transmise printr-un tip de mesaj WebSocket separat; ele sunt stocate în baza de date și consultate de client prin endpoint-urile REST \texttt{/api/alarms} (\S\ref{sec:api_rest}). Captura asociată unei alarme (snapshot) este codificată tot JPEG+Base64, la calitate 60, în momentul declanșării.
 
-\textit{[Diagramă: \textbf{diagramă de secvență UML} care arată ciclul de viață al unei conexiuni WebSocket: autentificare (validare token) $\to$ handshake (\texttt{accept}) $\to$ alocare coadă proprie în \texttt{client\_queues} $\to$ buclă de transmitere a mesajelor \texttt{video\_frame} la $\sim$30~FPS $\to$ \texttt{WebSocketDisconnect} $\to$ eliminare din dicționar. Pe verticală: actorii \emph{Client (browser)}, \emph{Endpoint /ws}, \emph{Coada proprie a clientului}, \emph{Firul de fuziune (\_broadcast\_frame)}. Plasată în \S\ref{sec:proiectare_websocket}.]}
+Ciclul de viață complet al unei conexiuni este ilustrat în Figura~\ref{fig:websocket_sequence}: de la autentificare și handshake, prin alocarea cozii proprii și bucla de transmitere la $\sim$30~FPS, până la deconectare și eliminarea cozii din dicționar.
 
-\subsubsection{Cadența de transmitere}
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[height=0.88\textheight]{websocket_sequence.pdf}
+	\caption{Diagramă de secvență UML a ciclului de viață al unei conexiuni WebSocket: autentificare (validarea token-ului JWT, cu închidere \texttt{1008} la eșec), handshake (\texttt{accept()}), alocarea cozii proprii în \texttt{client\_queues}, bucla de transmitere la $\sim$30~FPS (firul de fuziune produce prin \texttt{\_broadcast\_frame}, endpoint-ul consumă neblocant și trimite mesajele \texttt{video\_frame}) și deconectarea, cu eliminarea cozii din dicționar.}
+	\label{fig:websocket_sequence}
+\end{figure}
 
-Bucla de transmitere a fiecărui client consumă din \emph{propria coadă} în mod \textbf{neblocant} (\texttt{get(block=False)}): dacă există un mesaj, îl trimite (\texttt{send\_text(json.dumps(...))}); dacă nu, prinde \texttt{queue.Empty} și continuă. După fiecare iterație, bucla execută \texttt{await asyncio.sleep(0.03)}, ceea ce stabilește o cadență țintă de \textbf{aproximativ 30~FPS} (consistentă cu cerința NF1) și, în același timp, cedează controlul buclei de evenimente asincrone, permițând serverului să deservească în paralel ceilalți clienți și cererile REST.
+\subsection{Cadența de transmitere}
 
-\subsubsection{Heartbeat și detectarea deconectării}
+Bucla de transmitere a fiecărui client consumă din \emph{propria coadă} în mod neblocant (\texttt{get(block=False)}): dacă există un mesaj, îl trimite (\texttt{send\_text(\linebreak json.dumps(...))}); dacă nu, prinde \texttt{queue.Empty} și continuă. După fiecare iterație, bucla execută \texttt{await asyncio.sleep(0.03)}, ceea ce stabilește o cadență țintă de \textbf{aproximativ 30~FPS} (consistentă cu cerința NF1) și, în același timp, cedează controlul buclei de evenimente asincrone, permițând serverului să \linebreak deservească în paralel ceilalți clienți și cererile REST.
 
-Implementarea curentă \textbf{nu folosește un heartbeat la nivel de aplicație} (ping/pong explicit cu mesaje dedicate). Detectarea deconectării se bazează pe două mecanisme: (i) excepția \texttt{WebSocketDisconnect}, ridicată de FastAPI/Starlette atunci când clientul închide conexiunea, prinsă explicit în handler; și (ii) fluxul continuu de cadre, care joacă rolul unui heartbeat implicit -- absența mesajelor pentru o perioadă, combinată cu eroarea la \texttt{send\_text}, declanșează ieșirea din buclă. La nivel de transport, protocolul WebSocket peste TCP dispune de propriul mecanism de ping/pong de control, gestionat de bibliotecă, pe care implementarea se bazează pentru menținerea conexiunii. Indiferent de cauză, blocul \texttt{finally} asigură eliminarea cozii clientului din \texttt{client\_queues} (sub protecția \texttt{client\_lock}), prevenind acumularea de conexiuni moarte.
+\subsection{Heartbeat și detectarea deconectării}
 
-O îmbunătățire identificată pentru o versiune viitoare este adăugarea unui heartbeat aplicativ explicit (mesaj \texttt{\{"type": "ping"\}} periodic), util mai ales prin proxy-uri sau load-balancere care închid conexiunile inactive.
+Implementarea curentă nu folosește un heartbeat la nivel de aplicație (ping/pong explicit cu mesaje dedicate). Detectarea deconectării se bazează pe două mecanisme: (i) excepția \texttt{WebSocketDisconnect}, ridicată de FastAPI/Starlette atunci când clientul închide conexiunea, prinsă explicit în handler; și (ii) fluxul continuu de cadre, care joacă rolul unui heartbeat implicit -- absența mesajelor pentru o perioadă, combinată cu eroarea la \texttt{send\_text}, declanșează ieșirea din buclă. La nivel de transport, protocolul WebSocket peste TCP dispune de propriul mecanism de ping/pong de control, gestionat de bibliotecă, pe care implementarea se bazează pentru menținerea conexiunii. Indiferent de cauză, blocul \texttt{finally} asigură eliminarea cozii clientului din \texttt{client\_queues} (sub protecția \texttt{client\_lock}), prevenind acumularea de conexiuni moarte.
 
-\subsubsection{Reconectare}
 
-Reconectarea este \textbf{responsabilitatea clientului}, nu a serverului -- serverul tratează fiecare conexiune ca efemeră și nu păstrează stare per client între conexiuni (este \emph{stateless} din acest punct de vedere). La pierderea conexiunii, clientul React reia handshake-ul către \texttt{/ws}; deoarece serverul difuzează mereu cel mai recent cadru (mecanismul \emph{ultimul cadru disponibil} din \S\ref{subsec:sincronizare}), un client reconectat își reia fluxul imediat, fără a fi nevoie de resincronizare sau de recuperarea cadrelor pierdute. Această alegere -- de a nu garanta livrarea fiecărui cadru -- este corectă pentru un sistem de supraveghere live, unde un cadru pierdut este irelevant atâta timp cât cel curent este actual.
+
+\subsection{Reconectare}
+
+Reconectarea este responsabilitatea clientului, nu a serverului -- serverul tratează fiecare conexiune ca efemeră și nu păstrează stare per client între conexiuni (este \emph{stateless} din acest punct de vedere). La pierderea conexiunii, clientul React reia handshake-ul către \texttt{/ws}; deoarece serverul difuzează mereu cel mai recent cadru (mecanismul \emph{ultimul cadru disponibil} din \S\ref{subsec:sincronizare}), un client reconectat își reia fluxul imediat, fără a fi nevoie de resincronizare sau de recuperarea cadrelor pierdute. Această alegere -- de a nu garanta livrarea fiecărui cadru -- este corectă pentru un sistem de supraveghere live, unde un cadru pierdut este irelevant atâta timp cât cel curent este actual.
 
 \section{Proiectarea bazei de date}
 \label{sec:proiectare_db}
 
-Baza de date este sursa unică de adevăr a sistemului: tot ce trebuie să supraviețuiască unei reporniri -- utilizatori, persoane, embedding-uri faciale, plăcuțe, zone, camere, alarme și jurnale -- este persistat aici, iar structurile volatile (indexul FAISS, cache-ul de zone) sunt reconstruite din ea la pornire. Această secțiune prezintă schema reală implementată în \texttt{database\_manager.py}, relațiile dintre tabele, cheile și indecșii, precum și motivarea alegerii sistemului de baze de date.
+Baza de date reprezintă nucleul central de stocare al sistemului. Toate informațiile care trebuie să supraviețuiască unei reporniri (utilizatori, persoane, \emph{embedding}-uri faciale, plăcuțe, zone, camere, alarme și jurnale) sunt stocate aici, în timp ce structurile volatile (precum indexul FAISS și \emph{cache}-ul de zone) sunt reconstruite pe baza acestor date la fiecare inițializare. Această secțiune prezintă schema reală implementată în \texttt{database\_manager.py}, detaliind relațiile dintre tabele, cheile, indecșii, precum și motivarea alegerii acestui sistem de gestiune a bazelor de date.
 
-\subsubsection{Alegerea sistemului de baze de date}
+\subsection{Alegerea sistemului de baze de date}
 
 Sistemul folosește \textbf{PostgreSQL}, nu SQLite. Decizia este motivată de mai multe trăsături folosite efectiv în schemă, indisponibile sau slabe în SQLite:
 \begin{itemize}
     \item tipul \textbf{tablou} (\texttt{TEXT[]}) pentru câmpul \texttt{authorized\_zones} al persoanelor;
     \item tipul \textbf{\texttt{JSONB}} pentru metadatele de detecție (\texttt{detection\_metadata}, \texttt{details}), cu interogare și indexare nativă;
     \item tipul \textbf{\texttt{BYTEA}} pentru stocarea embedding-urilor faciale binare;
-    \item \textbf{concurența reală} la scriere -- esențială, pentru că pipeline-ul multi-threaded (\S\ref{sec:pipeline_multithread}) scrie alarme și jurnale din firul de fuziune în paralel cu cererile REST ale utilizatorilor, scenariu în care blocarea la nivel de fișier a SQLite ar deveni un gâtuitor.
+    \item \textbf{concurența reală} la scriere: aspect esențial, justificat de faptul că pipeline-ul multi-threaded (\S\ref{sec:pipeline_multithread}) scrie alarme și jurnale din firul de fuziune în paralel cu apelurile REST ale utilizatorilor. În această arhitectură, blocarea exclusivă a fișierului specifică SQLite ar deveni un factor limitativ critic pentru întregul sistem.
 \end{itemize}
-Conexiunea este configurată în \texttt{DB\_CONFIG} către baza \texttt{facial\_recognition} de pe \texttt{localhost}, cu credențiale dedicate (vezi și cerința NF3).
+Conexiunea este configurată în \texttt{DB\_CONFIG} către baza \texttt{facial\_recognition} de pe \texttt{localhost}, cu credențiale dedicate (cerința NF3).
 
-\subsubsection{Diagrama entitate-relație}
+\subsection{Diagrama entitate-relație}
 
-\textit{[Diagramă: \textbf{diagrama entitate-relație (ERD)} cu cele zece tabele de mai jos. Marcați cheile primare (PK) cu subliniere, cheile străine (FK) cu trimitere săgeată către tabela referită, și notați pe fiecare legătură politica \texttt{ON DELETE} (\texttt{CASCADE} sau \texttt{SET NULL}). Atenție: relația persoană--zonă \emph{nu} trece printr-un tabel de joncțiune, ci este denormalizată ca atribut tablou pe \texttt{persons} -- reprezentați-o ca atribut multi-valoare, nu ca entitate asociativă. Plasată la începutul \S\ref{sec:proiectare_db}.]}
+Figura~\ref{fig:erd} prezintă diagrama entitate-relație a schemei. Cheile primare surogat (\texttt{id}) sunt subliniate, iar cheile străine sunt marcate prin \texttt{(FK)} și legate de tabelul referit printr-o linie continuă, etichetată cu politica \texttt{ON DELETE} corespunzătoare. Cele patru relații impuse prin chei străine sunt de tip 1:N (notație \emph{crow's-foot}): trei dintre acestea cu \texttt{ON DELETE CASCADE} (\texttt{face\_embeddings} și \texttt{access\_logs} către \texttt{persons}, respectiv \texttt{vehicle\_access\_logs} către \texttt{license\_plates}), iar una cu \texttt{ON DELETE SET NULL} (\texttt{cameras} către \texttt{zones}). Liniile punctate marchează legăturile menținute exclusiv la nivel de aplicație, fără chei străine: cele patru câmpuri \texttt{camera\_id} (de tip \texttt{VARCHAR}) către \texttt{cameras} și, cel mai important, relația dintre persoană și zonă. Aceasta din urmă \emph{nu} trece printr-un tabel de joncțiune, ci este denormalizată sub forma unui atribut multi-valoare, \texttt{authorized\_zones TEXT[]}, definit direct în tabelul \texttt{persons}, unde zonele sunt referite prin nume, nu prin constrângeri de tip FK.
 
-\subsubsection{Tabelele principale}
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth]{erd.pdf}
+	\caption{Diagrama entitate-relație (ERD) a schemei PostgreSQL \texttt{facial\_recognition}, cu cele zece tabele implementate în \texttt{database\_manager.py}. Cheile primare (\texttt{id}) sunt subliniate, iar cele cinci constrângeri \texttt{UNIQUE} sunt marcate cu asterisc. Liniile punctate evidențiază legăturile logice neimpuse prin FK: cele patru câmpuri \texttt{camera\_id} către \texttt{cameras} și relația persoană--zonă, denormalizată ca atribut multi-valoare \texttt{authorized\_zones TEXT[]} pe \texttt{persons} (nu ca entitate asociativă). Tabelul \texttt{users} este independentă.}
+	\label{fig:erd}
+\end{figure}
 
-Schema reală conține zece tabele. Pentru fidelitate față de cod, mai jos sunt prezentate cu numele exacte din \texttt{database\_manager.py} (care diferă pe alocuri de denumirile generice -- se semnalează explicit unde e cazul).
+\clearpage
+
+\subsection{Tabelele principale}
+
+Schema reală conține zece tabele. Pentru a menține o concordanță cu \linebreak implementarea, în continuare sunt utilizate denumirile exacte din modulul \linebreak \texttt{database\_manager.py}. Orice diferență între aceste denumiri tehnice și terminologia generică va fi semnalată explicit.
 
 \begin{description}
-    \item[\texttt{persons}] -- persoanele înregistrate. \texttt{id SERIAL PK}; \texttt{name}; \texttt{employee\_id} (\texttt{UNIQUE NOT NULL}); \texttt{department}; \texttt{authorized\_zones TEXT[]}; \texttt{created\_at}. \emph{Observație de proiectare:} autorizarea pe zone este \textbf{denormalizată} ca tablou de nume de zone direct pe persoană, \emph{nu} printr-un tabel de joncțiune \texttt{person\_zone\_authorization} separat. Compromisul: citire foarte rapidă a zonelor unei persoane (folosită intens de pipeline, cache-uită în \texttt{\_person\_zones\_cache}), în schimbul pierderii integrității referențiale către \texttt{zones} (zonele sunt referite prin nume, nu prin FK).
+    \item[\texttt{persons}] -- persoanele înregistrate. \texttt{id SERIAL PK}; \texttt{name}; \texttt{employee\_id} (\texttt{UNIQUE NOT NULL}); \texttt{department}; \texttt{authorized\_zones TEXT[]}; \texttt{created\_at}. \linebreak \emph{Observație de proiectare:} autorizarea pe zone este denormalizată ca tablou de nume de zone direct pe persoană, nu printr-un tabel de joncțiune \texttt{person\_zone\_authorization} separat. Compromisul: citire foarte rapidă a zonelor unei persoane (folosită intens de pipeline, cache-uită în \texttt{\_person\_zones\_cache}), în schimbul pierderii integrității referențiale către \texttt{zones} (zonele sunt referite prin nume, nu prin FK).
 
-    \item[\texttt{face\_embeddings}] -- corespondentul \emph{person\_images} din cerință, dar stochează \textbf{embedding-uri, nu imagini}. \texttt{id SERIAL PK}; \texttt{person\_id INTEGER REFERENCES persons(id) ON DELETE CASCADE}; \texttt{embedding BYTEA NOT NULL} (vectorul InsightFace 512-d serializat binar); \texttt{created\_at}. Relația cu \texttt{persons} este \textbf{unu-la-mulți} (o persoană poate avea mai multe embedding-uri, câte unul per imagine înregistrată), iar \texttt{ON DELETE CASCADE} asigură ștergerea embedding-urilor odată cu persoana. Acest tabel este sursa din care se reconstruiește indexul FAISS la pornire.
+    \item[\texttt{face\_embeddings}] -- corespondentul \emph{person\_images} din cerință, dar stochează embedding-uri, nu imagini. \texttt{id SERIAL PK}; \texttt{person\_id INTEGER \linebreak REFERENCES persons(id) ON DELETE CASCADE}; \texttt{embedding BYTEA NOT \linebreak NULL} (vectorul InsightFace 512-d serializat binar); \texttt{created\_at}. Relația cu \texttt{persons} este \textbf{1:N} (o persoană poate avea mai multe embedding-uri, câte unul per imagine înregistrată), iar \texttt{ON DELETE CASCADE} asigură ștergerea embedding-urilor odată cu persoana. Acest tabel este sursa din care se reconstruiește indexul FAISS la pornire.
 
     \item[\texttt{access\_logs}] -- jurnalul accesărilor de persoane. \texttt{id SERIAL PK}; \texttt{person\_id REFERENCES persons(id) ON DELETE CASCADE}; \texttt{camera\_id}; \texttt{confidence}; \texttt{detected\_at}.
 
-    \item[\texttt{license\_plates}] -- corespondentul \emph{plates}. \texttt{id SERIAL PK}; \texttt{plate\_number VARCHAR(20) UNIQUE NOT NULL}; \texttt{vehicle\_type}; \texttt{owner\_name}; \texttt{owner\_id}; \texttt{is\_authorized BOOLEAN DEFAULT TRUE}; \texttt{registration\_date}; \texttt{expiry\_date}; \texttt{notes}. Cheia naturală \texttt{plate\_number} este folosită ca țintă de FK de către jurnalul vehiculelor.
+    \item[\texttt{license\_plates}] -- corespondentul \emph{plates}. \texttt{id SERIAL PK}; \texttt{plate\_number \linebreak VARCHAR(20) UNIQUE NOT NULL}; \texttt{vehicle\_type}; \texttt{owner\_name}; \texttt{owner\_id}; \texttt{is\_authorized BOOLEAN DEFAULT TRUE}; \texttt{registration\_date}; \texttt{expiry\_\linebreak date}; \texttt{notes}. Cheia naturală \texttt{plate\_number} este folosită ca țintă de FK de către jurnalul vehiculelor.
 
-    \item[\texttt{vehicle\_access\_logs}] -- jurnalul accesărilor de vehicule. \texttt{id SERIAL PK}; \texttt{plate\_number} cu \texttt{FOREIGN KEY (plate\_number) REFERENCES license\_plates(plate\_number) ON DELETE CASCADE}; \texttt{camera\_id}; \texttt{confidence}; \texttt{vehicle\_type}; \texttt{detected\_at}; \texttt{image\_path}; \texttt{is\_authorized}.
+    \item[\texttt{vehicle\_access\_logs}] -- jurnalul accesărilor de vehicule. \texttt{id SERIAL PK}; \texttt{plate\_ \linebreak number} cu \texttt{FOREIGN KEY (plate\_number) REFERENCES license\_plates(\linebreak plate\_number) ON DELETE CASCADE}; \texttt{camera\_id}; \texttt{confidence}; \texttt{vehicle\_\linebreak type}; \texttt{detected\_at}; \texttt{image\_path}; \texttt{is\_authorized}.
 
-    \item[\texttt{users}] -- conturile de utilizator. \texttt{id SERIAL PK}; \texttt{username UNIQUE NOT NULL}; \texttt{password\_hash}; \texttt{role VARCHAR(20) DEFAULT 'user'}; \texttt{full\_name}; \texttt{created\_at}. Parola este stocată exclusiv ca hash (cerința NF3), iar \texttt{role} alimentează controlul de acces (\S\ref{sec:rbac}).
+    \item[\texttt{users}] -- conturile de utilizator. \texttt{id SERIAL PK}; \texttt{username UNIQUE NOT NULL}; \texttt{password\_hash}; \texttt{role VARCHAR(20) DEFAULT 'user'}; \texttt{full\_name}; \linebreak \texttt{created\_at}. Parola este stocată exclusiv ca hash (cerința NF3), iar \texttt{role} alimentează controlul de acces (\S\ref{sec:rbac}).
 
     \item[\texttt{alarms}] -- corespondentul \emph{alerts}. \texttt{id SERIAL PK}; \texttt{camera\_id NOT NULL}; \texttt{type NOT NULL}; \texttt{severity DEFAULT 'medium'}; \texttt{status DEFAULT 'unresolved'}; \texttt{description}; \texttt{snapshot} (captura JPEG+Base64 la momentul declanșării); \texttt{detection\_metadata JSONB}; \texttt{created\_at}; \texttt{resolved\_at}; \texttt{resolved\_by}; \texttt{notes}. Câmpurile \texttt{resolved\_*} susțin ciclul de viață al alarmei (UC11).
 
-    \item[\texttt{zones}] -- zonele de supraveghere. \texttt{id SERIAL PK}; \texttt{name UNIQUE NOT NULL}; \texttt{description}; \texttt{is\_restricted BOOLEAN DEFAULT FALSE}; \texttt{created\_at}.
+    \item[\texttt{zones}] -- zonele de supraveghere. \texttt{id SERIAL PK}; \texttt{name UNIQUE NOT NULL}; \linebreak \texttt{description}; \texttt{is\_restricted BOOLEAN DEFAULT FALSE}; \texttt{created\_at}.
 
-    \item[\texttt{cameras}] -- registrul persistent de camere. \texttt{id SERIAL PK}; \texttt{camera\_id UNIQUE NOT NULL}; \texttt{name}; \texttt{zone\_id INTEGER REFERENCES zones(id) ON DELETE SET NULL}; \texttt{location}; \texttt{stream\_url}; \texttt{camera\_type DEFAULT 'ip'}; \texttt{created\_at}. Politica \texttt{ON DELETE SET NULL} pe \texttt{zone\_id} face ca ștergerea unei zone să lase camera orfană (fără zonă), nu să o șteargă.
+    \item[\texttt{cameras}] -- registrul persistent de camere. \texttt{id SERIAL PK}; \texttt{camera\_id UNIQUE NOT NULL}; \texttt{name}; \texttt{zone\_id INTEGER REFERENCES zones(id) ON DELETE SET NULL}; \texttt{location}; \texttt{stream\_url}; \texttt{camera\_type DEFAULT 'ip'}; \linebreak \texttt{created\_at}. Politica \texttt{ON DELETE SET NULL} pe \texttt{zone\_id} face ca ștergerea unei zone să lase camera fără zonă, nu să o șteargă.
 
     \item[\texttt{detection\_logs}] -- corespondentul \emph{logs}; istoricul complet al fiecărei detecții. \texttt{id SERIAL PK}; \texttt{camera\_id NOT NULL}; \texttt{type NOT NULL}; \texttt{subject}; \texttt{confidence}; \texttt{severity}; \texttt{status}; \texttt{details JSONB}; \texttt{created\_at}. Acesta este tabelul interogat de \texttt{/api/logs} și exportat ca CSV.
 \end{description}
 
-\subsubsection{Chei primare și străine}
+\subsection{Chei primare și străine}
 
 Toate tabelele folosesc o cheie primară surogat \texttt{id SERIAL} (întreg auto-incrementat). Pe lângă chei primare, schema definește următoarele \textbf{chei străine} și politici de ștergere:
 \begin{itemize}
@@ -655,16 +773,16 @@ Toate tabelele folosesc o cheie primară surogat \texttt{id SERIAL} (întreg aut
     \item \texttt{vehicle\_access\_logs.plate\_number} $\rightarrow$ \texttt{license\_plates.plate\_number}, \texttt{ON DELETE CASCADE};
     \item \texttt{cameras.zone\_id} $\rightarrow$ \texttt{zones.id}, \texttt{ON DELETE SET NULL}.
 \end{itemize}
-Constrângeri de unicitate (\texttt{UNIQUE}) protejează \texttt{persons.employee\_id}, \texttt{license\_plates.plate\_number}, \texttt{users.username}, \texttt{zones.name} și \texttt{cameras.camera\_id}. \emph{Notă:} legătura logică persoană--zonă și cea alarmă/jurnal--cameră (\texttt{camera\_id} este \texttt{VARCHAR}, nu FK către \texttt{cameras}) nu sunt impuse prin chei străine, ci la nivel de aplicație -- o decizie de proiectare care privilegiază viteza de scriere a jurnalelor în detrimentul integrității referențiale stricte.
+Constrângeri de unicitate (\texttt{UNIQUE}) protejează \texttt{persons.employee\_id}, \texttt{license\_\linebreak plates.plate\_number}, \texttt{users.username}, \texttt{zones.name} și \texttt{cameras.camera\_id}. \emph{Notă:} legătura logică persoană--zonă și cea alarmă/jurnal--cameră (\texttt{camera\_id} este \texttt{VARCHAR}, nu FK către \texttt{cameras}) nu sunt impuse prin chei străine, ci la nivel de aplicație -- o decizie de proiectare care privilegiază viteza de scriere a jurnalelor în detrimentul integrității referențiale stricte.
 
-\subsubsection{Indexarea}
+\subsection{Indexarea}
 
 Pentru a susține interogările frecvente (filtrare de jurnale, listare de alarme, căutare de plăcuțe), schema definește următorii indecși secundari:
 \begin{itemize}
     \item \texttt{idx\_plate\_number} pe \texttt{license\_plates(plate\_number)};
-    \item \texttt{idx\_detlogs\_created\_at} pe \texttt{detection\_logs(created\_at DESC)}, \texttt{idx\_detlogs\_type} pe \texttt{(type)}, \texttt{idx\_detlogs\_camera} pe \texttt{(camera\_id)} -- acoperă filtrele paginii de jurnale (interval de timp, tip, cameră);
-    \item \texttt{idx\_vehicle\_access\_time} pe \texttt{vehicle\_access\_logs(detected\_at)}, \texttt{idx\_vehicle\_camera} pe \texttt{(camera\_id)};
-    \item \texttt{idx\_alarms\_status}, \texttt{idx\_alarms\_type}, \texttt{idx\_alarms\_severity}, \texttt{idx\_alarms\_created\_at} pe \texttt{alarms} -- acoperă filtrarea și sortarea panoului de alarme;
+    \item \texttt{idx\_detlogs\_created\_at} pe \texttt{detection\_logs(created\_at DESC)}, \linebreak \texttt{idx\_detlogs\_type} pe \texttt{(type)}, \texttt{idx\_detlogs\_camera} pe \texttt{(camera\_id)} -- acoperă filtrele paginii de jurnale (interval de timp, tip, cameră);
+    \item \texttt{idx\_vehicle\_access\_time} pe \texttt{vehicle\_access\_logs(detected\_at)}, \linebreak \texttt{idx\_vehicle\_camera} pe \texttt{(camera\_id)};
+    \item \texttt{idx\_alarms\_status}, \texttt{idx\_alarms\_type}, \texttt{idx\_alarms\_severity}, \texttt{idx\_\linebreak alarms\_created\_at} pe \texttt{alarms} -- acoperă filtrarea și sortarea panoului de alarme;
     \item \texttt{idx\_cameras\_zone} pe \texttt{cameras(zone\_id)}.
 \end{itemize}
 Indexul pe \texttt{created\_at DESC} al jurnalului de detecții este deosebit de relevant: cele mai multe interogări afișează evenimentele recente în ordine descrescătoare, iar indexul descendent elimină nevoia unei sortări la fiecare cerere.
@@ -672,9 +790,9 @@ Indexul pe \texttt{created\_at DESC} al jurnalului de detecții este deosebit de
 \section{Proiectarea sistemului de control al accesului}
 \label{sec:rbac}
 
-Controlul accesului protejează operațiile sensibile ale sistemului împotriva utilizatorilor neautorizați și implementează cerința NF3. El are trei componente: un model RBAC cu două roluri, un mecanism de sesiune fără stare bazat pe JWT și o stocare sigură a parolelor. Toate sunt prezentate mai jos exact așa cum sunt implementate în \texttt{app.py} și \texttt{database\_manager.py}, inclusiv limitările identificate.
+Controlul accesului protejează operațiile sensibile ale sistemului împotriva utilizatorilor neautorizați și implementează cerința NF3. El are trei componente: un model RBAC cu două roluri, un mecanism de sesiune fără stare bazat pe JWT (cu revocare prin listă neagră) și o stocare sigură a parolelor. Toate sunt prezentate mai jos exact așa cum sunt implementate în \texttt{app.py} și \texttt{database\_manager.py}, inclusiv singura limitare reziduală rămasă.
 
-\subsubsection{Modelul RBAC}
+\subsection{Modelul RBAC}
 
 Sistemul folosește un model \textbf{Role-Based Access Control} minimal, cu două roluri stocate în coloana \texttt{users.role}:
 \begin{itemize}
@@ -687,9 +805,9 @@ Aplicarea rolurilor se face prin sistemul de dependențe FastAPI. Două funcții
     \item \texttt{get\_current\_user} -- decodează și validează token-ul JWT din antetul \texttt{Authorization: Bearer} și, suplimentar, \emph{re-verifică utilizatorul față de baza de date} (prin \texttt{get\_user\_by\_id}): un cont șters este respins cu \texttt{401 "User no longer exists"}, iar rolul curent din DB este preferat în locul celui din token (posibil învechit). Orice endpoint care o folosește cere doar ca utilizatorul să fie \emph{autentificat} (oricare rol).
     \item \texttt{require\_admin} -- compusă peste \texttt{get\_current\_user}, verifică suplimentar \texttt{role == "admin"} și, în caz contrar, ridică \texttt{HTTPException 403} cu mesajul \texttt{"Admin access required"}.
 \end{itemize}
-Astfel, nivelul de permisiune al unui endpoint este declarat la definirea lui, prin tipul dependenței injectate (\texttt{Depends(require\_admin)} vs.\ \texttt{Depends(get\_current\_user)}).
+Astfel, nivelul de permisiune al unui endpoint este declarat la definirea lui, prin tipul dependenței injectate (\texttt{Depends(require\_admin)} vs.\ \texttt{Depends\linebreak(get\_current\_user)}).
 
-\subsubsection{Matricea de permisiuni}
+\subsection{Matricea de permisiuni}
 
 Tabelul~\ref{tab:rbac_matrix} rezumă, pe module, ce poate face fiecare rol, conform dependențelor injectate efectiv în cod.
 
@@ -697,9 +815,9 @@ Tabelul~\ref{tab:rbac_matrix} rezumă, pe module, ce poate face fiecare rol, con
 \centering
 \caption{Matricea de permisiuni pe module și roluri.}
 \label{tab:rbac_matrix}
-\begin{tabular}{lccc}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}Xccc@{}}
 \hline
-\textbf{Modul / operație} & \textbf{admin} & \textbf{user} & \textbf{neautentificat} \\
+\textbf{Modul / operație} & \textbf{admin} & \textbf{user} & \shortstack{\textbf{ne-}\\\textbf{autentificat}} \\
 \hline
 Autentificare (\texttt{/api/login}) & \checkmark & \checkmark & \checkmark \\
 Gestiune persoane (CRUD, imagini, istoric) & \checkmark & --- & --- \\
@@ -708,76 +826,81 @@ Gestiune utilizatori (creare/modificare/ștergere) & \checkmark & --- & --- \\
 Toggle module AI (face/plate/fire/HAR/weapon) & \checkmark & --- & --- \\
 Creare/modificare/ștergere zone & \checkmark & --- & --- \\
 Creare/modificare/ștergere camere (DB) & \checkmark & --- & --- \\
-Control camere runtime (start/stop/add-ip/remove-ip) & \checkmark & --- & --- \\
+Control fluxuri video runtime (pornire/oprire, \texttt{/api/streams}) & \checkmark & --- & --- \\
 Stare sistem (\texttt{/api/status}) / listare camere active & \checkmark & \checkmark & --- \\
 Listare zone / camere (citire) & \checkmark & \checkmark & --- \\
 Statistici interne detectoare (\texttt{/api/har/stats}, \texttt{/api/weapon/stats}) & \checkmark & \checkmark & --- \\
 Vizualizare jurnale + export CSV (inclusiv \texttt{/api/logs/vehicle}) & \checkmark & \checkmark & --- \\
 Vizualizare + gestiune alarme (rezolvare) & \checkmark & \checkmark & --- \\
-Statistici (\texttt{/api/statistics}) & \checkmark & \checkmark & --- \\
+Statistici (\texttt{/api/stats}) & \checkmark & \checkmark & --- \\
 Schimbare parolă cont propriu & \checkmark & \checkmark & --- \\
+Logout / revocare token propriu (\texttt{/api/logout}) & \checkmark & \checkmark & --- \\
 \hline
-\end{tabular}
+\end{tabularx}
 \end{table}
 
-\paragraph*{Acoperirea completă a endpoint-urilor.} Spre deosebire de o versiune anterioară a sistemului, în care un set de endpoint-uri operaționale rămăseseră fără dependență de autentificare, în versiunea curentă \textbf{toate} rutele \texttt{/api} (cu excepția firească a \texttt{/api/login}) au o dependență injectată: operațiile cu efect -- controlul camerelor în timp real (\texttt{/api/camera/start}, \texttt{stop}, \texttt{stop-all}, \texttt{add-ip}, \texttt{remove-ip}) -- necesită \texttt{Depends(require\_admin)}, iar endpoint-urile de citire operațională (\texttt{/api/status}, \texttt{/api/cameras/list}, \texttt{/api/har/stats}, \texttt{/api/weapon/stats}, \texttt{/api/logs/vehicle}) necesită \texttt{Depends(get\_current\_user)}. Astfel, fosta lacună prin care pornirea/oprirea camerelor era posibilă neautentificat a fost închisă.
+\paragraph*{Acoperirea completă a endpoint-urilor.} Toate rutele \texttt{/api} (cu excepția firească a \texttt{/api/login}) au o dependență de securitate injectată: operațiile cu efect -- controlul fluxurilor video în timp real (\texttt{POST /api/streams}, \texttt{DELETE /api/streams}, \texttt{DELETE /api/streams/\{camera\_id\}}) -- necesită \texttt{Depends(\linebreak require\_admin)}, iar endpoint-urile de citire operațională (\texttt{/api/status}, \texttt{GET /api/streams}, \texttt{/api/har/stats}, \texttt{/api/weapon/stats}, \texttt{/api/logs/vehicle}) necesită \texttt{Depends(get\_current\_user)}. Astfel, nicio operație nu poate fi efectuată fără autentificare prealabilă.
 
-\subsubsection{Hashing-ul parolelor}
+\subsection{Hashing-ul parolelor}
 
-Parolele nu sunt stocate niciodată în clar. Stocarea folosește \textbf{bcrypt} (biblioteca \texttt{bcrypt} din Python), nu argon2. La crearea sau actualizarea unui cont, parola este hash-uită cu \texttt{bcrypt.hashpw(password.encode(), bcrypt.gensalt())}, iar rezultatul (care include sarea generată aleator și factorul de cost încorporat în șir) este salvat în coloana \texttt{users.password\_hash VARCHAR(255)}. La autentificare, verificarea se face cu \texttt{bcrypt.checkpw(password.encode(), password\_hash.encode())} în metoda \texttt{authenticate\_user}, care returnează datele utilizatorului \emph{fără} câmpul \texttt{password\_hash}. Folosirea lui \texttt{gensalt()} garantează o sare unică per parolă, iar costul adaptiv al bcrypt oferă rezistență la atacuri de tip brute-force/rainbow-table.
+Parolele nu sunt stocate niciodată în format clar (\emph{plaintext}). Mecanismul de securizare utilizează algoritmul \textbf{bcrypt} (prin intermediul bibliotecii \texttt{bcrypt} din Python). La crearea sau actualizarea unui cont, parola este procesată prin funcția \texttt{bcrypt.hashpw(password.encode(), bcrypt.gensalt())}. Rezultatul generat, care include valoarea aleatoare de tip \emph{salt} și factorul de cost încorporat în șir, este salvat în coloana \texttt{users.password\_hash VARCHAR(255)}. La autentificare, validarea se realizează prin \texttt{bcrypt.checkpw(password.encode(), password\_hash.encode())} în cadrul metodei \texttt{authenticate\_user}, care returnează datele utilizatorului \emph{fără} câmpul \texttt{password\_hash}. Utilizarea funcției \texttt{gensalt()} garantează un \emph{salt} unic pentru fiecare parolă, în timp ce costul adaptiv al algoritmului bcrypt asigură rezistența împotriva atacurilor de tip \emph{brute-force} și \emph{rainbow table}.
 
-\subsubsection{Gestiunea sesiunii (JWT)}
+\subsection{Gestiunea sesiunii (JWT)}
 
-Sesiunile sunt \textbf{fără stare} (\emph{stateless}): după autentificarea reușită, serverul emite un \textbf{JSON Web Token} semnat, pe care clientul îl atașează fiecărei cereri ulterioare în antetul \texttt{Authorization: Bearer <token>}; serverul nu păstrează nicio sesiune în memorie sau în baza de date.
+Sesiunile sunt fără stare (\emph{stateless}): după autentificarea reușită, serverul emite un JSON Web Token semnat, pe care clientul îl atașează fiecărei cereri ulterioare în antetul \texttt{Authorization: Bearer <token>}; serverul nu păstrează o stare de sesiune \emph{pozitivă} în memorie sau în baza de date. Singura stare reținută este o listă neagră de token-uri revocate (tabela \texttt{revoked\_tokens}, detaliată mai jos), consultată la fiecare cerere pentru a permite delogarea efectivă înainte de expirare.
 
 Parametrii concreți ai token-ului, din \texttt{app.py}:
 \begin{itemize}
     \item \textbf{Algoritm:} \texttt{HS256} (HMAC-SHA256, semnătură simetrică).
     \item \textbf{Durată de viață:} 8 ore (\texttt{JWT\_EXPIRATION\_HOURS = 8}), prin câmpul \texttt{exp}.
-    \item \textbf{Payload:} \texttt{sub} (username), \texttt{user\_id}, \texttt{role}, \texttt{full\_name}, \texttt{exp}, \texttt{iat}. Includerea lui \texttt{role} în token permite verificarea rolului fără o interogare suplimentară în baza de date la fiecare cerere.
+    \item \textbf{Payload:} \texttt{sub} (username), \texttt{user\_id}, \texttt{role}, \texttt{full\_name}, \texttt{jti} (identificator unic de token, generat cu \texttt{uuid4} și folosit pentru revocare), \texttt{exp}, \texttt{iat}. Includerea lui \texttt{role} în token permite verificarea rolului fără o interogare suplimentară în baza de date la fiecare cerere.
     \item \textbf{Validare:} la decodare, \texttt{jwt.ExpiredSignatureError} produce \texttt{401 "Token has expired"}, iar \texttt{jwt.InvalidTokenError} produce \texttt{401 "Invalid token"}.
 \end{itemize}
 
-\paragraph*{Cheia de semnare și revocarea.} Cheia de semnare (\texttt{JWT\_SECRET}) este \textbf{externalizată în mediul de execuție} (variabila de mediu \texttt{JWT\_SECRET}); dacă nu este setată, sistemul generează o cheie aleatorie per-proces și avertizează la pornire -- un fallback sigur pentru dezvoltare, dar care invalidează token-urile la fiecare repornire, motiv pentru care setarea explicită a variabilei este obligatorie pentru orice deployment real. Cât despre revocare, deși token-ul în sine este stateless, dependența \texttt{get\_current\_user} \emph{re-validează la fiecare cerere} identitatea față de baza de date: ștergerea unui cont și schimbarea de rol au efect imediat (la următoarea cerere), nu doar după expirarea celor 8 ore. Singura fereastră reziduală este între emiterea token-ului și prima cerere care reflectă schimbarea; pentru cerințe stricte de revocare instantanee (ex.\ invalidarea unui token deja emis înainte de expirare) ar fi necesar un mecanism suplimentar (token-uri de scurtă durată cu \emph{refresh} sau o listă neagră). Aceste aspecte sunt consemnate ca parte a analizei critice a cerinței NF3.
+\paragraph*{Cheia de semnare.} Cheia de semnare (\texttt{JWT\_SECRET}) este externalizată în mediul de execuție (variabila de mediu \texttt{JWT\_SECRET}).  Comportamentul sistemului în cazul absenței acesteia depinde de mediul de rulare, definit de variabila \texttt{APP\_ENV}: în \textbf{producție} (\texttt{APP\_ENV=production}), o cheie absentă sau mai scurtă de 32 de caractere oprește explicit pornirea aplicației (\texttt{RuntimeError}, \emph{fail-fast}), prevenind emiterea de token-uri cu o cheie efemeră; în \textbf{dezvoltare}, sistemul recurge la o cheie aleatorie per-proces și doar avertizează la pornire. Astfel, capcana silențioasă prin care un deployment real ar fi putut rula pe o cheie temporară (cu invalidarea token-urilor la fiecare repornire) este eliminată.
+
+\paragraph*{Revocarea sesiunilor.} Deși token-ul în sine este \emph{stateless}, sistemul oferă revocare instantanee printr-o listă neagră (tabela \texttt{revoked\_tokens}, cu cheie \texttt{jti}). Fiecare token primește la emitere un identificator unic \texttt{jti} (\texttt{uuid4}); endpoint-ul \texttt{POST /api/logout} înscrie \texttt{jti}-ul curent în listă, iar dependența \texttt{get\_current\_user} respinge cu \texttt{401 "Token has been revoked"} orice token revocat -- verificare aplicată și la deschiderea canalului WebSocket (închidere \texttt{1008}). Pe lângă aceasta, \texttt{get\_current\_user} \emph{re-validează la fiecare cerere} identitatea față de baza de date, astfel încât ștergerea unui cont și schimbarea de rol au efect imediat. Intrările expirate din listă nu mai au efect și sunt curățate periodic (\texttt{purge\_expired\_revocations}), astfel încât dimensiunea tabelei rămâne mărginită.
+
+\paragraph*{Limitare reziduală.} Lista neagră revocă token-uri \emph{individuale} (de exemplu sesiunea curentă, la logout, sau un token compromis). Ea nu invalidează automat \emph{toate} sesiunile active ale unui utilizator la schimbarea parolei, întrucât serverul nu cunoaște \texttt{jti}-urile token-urilor încă neprezentate. Scenariul ``delogare de pe toate dispozitivele'' ar necesita o extindere suplimentară -- de exemplu o coloană \texttt{users.tokens\_valid\_after} comparată cu \texttt{iat} la fiecare cerere. Această limitare reziduală este consemnată ca parte a analizei critice a cerinței NF3.
 
 \section{Proiectarea logicii de alarmare}
 \label{sec:logica_alarme}
 
-Logica de alarmare este punctul în care detecțiile brute ale modulelor AI devin evenimente acționabile pentru operator. Ea este implementată centralizat în firul de fuziune (\S\ref{subsec:fire_executie}), după ce toate rezultatele unui cadru au fost agregate, și are trei responsabilități: (i) evaluarea regulilor de declanșare, (ii) atribuirea unei severități, (iii) persistarea și difuzarea alarmei cu deduplicare. Această secțiune descrie regulile exact așa cum sunt implementate în \texttt{app.py}, semnalând și diferențele față de specificația inițială.
+Logica de alarmare este punctul în care detecțiile brute ale modulelor AI devin evenimente acționabile pentru operator. Ea este implementată centralizat în firul de fuziune (\S\ref{subsec:fire_executie}), după ce toate rezultatele unui cadru au fost agregate, și are trei responsabilități: (i) evaluarea regulilor de declanșare, (ii) atribuirea unei severități, (iii) persistarea și difuzarea alarmei cu deduplicare. Această secțiune descrie regulile exact așa cum sunt implementate în \texttt{app.py}.
 
-\subsubsection{Reguli de declanșare}
+\subsection{Reguli de declanșare}
 
-O alarmă este creată prin metoda \texttt{\_create\_alarm\_if\_needed(camera\_id, alarm\_type, severity, description, snapshot, metadata, dedup\_subject)}. Regulile efective sunt următoarele:
+O alarmă este creată prin metoda \texttt{\_create\_alarm\_if\_needed(camera\_id, \linebreak alarm\_type, severity, description, snapshot, metadata, dedup\_\linebreak subject)}. Regulile efective sunt următoarele:
 
 \begin{description}
     \item[Persoană necunoscută (tip \texttt{face}).] Pentru orice rezultat facial cu \texttt{name == "Unknown"}, indiferent de zonă, se creează o alarmă de tip \texttt{face} cu severitate \texttt{critical} și descrierea \texttt{"Unauthorized person detected (...\%)"}.
 
-    \item[Persoană în zonă restricționată (tip \texttt{unauthorized\_zone}).] Verificarea suplimentară \texttt{\_check\_zone\_authorization} se aplică doar dacă zona camerei are \texttt{is\_restricted = TRUE}. În acest caz se creează o alarmă \texttt{unauthorized\_zone} cu severitate \texttt{critical} în două situații: (a) \emph{persoană necunoscută} în zona restricționată (\texttt{"Unknown person in restricted zone '...'"}), sau (b) \emph{persoană cunoscută dar neautorizată} -- recunoscută, dar al cărei \texttt{employee\_id} nu apare în \texttt{authorized\_zones} ale zonei (\texttt{"<nume> (<id>) in restricted zone '...' --- not authorized"}). O persoană recunoscută \emph{și} autorizată nu generează nicio alarmă.
+    \item[Persoană în zonă restricționată (tip \texttt{unauthorized\_zone}).] Verificarea suplimentară \texttt{\_check\_zone\_authorization} se aplică doar dacă zona camerei are \texttt{is\_restricted = TRUE}. În acest caz se creează o alarmă \linebreak \texttt{unauthorized\_zone} cu severitate \texttt{critical} în două situații: (a) \emph{persoană necunoscută} în zona restricționată (\texttt{"Unknown person in restricted \linebreak zone '...'"}), sau (b) \emph{persoană cunoscută dar neautorizată} -- recunoscută, dar al cărei \texttt{employee\_id} nu apare în \texttt{authorized\_zones} ale zonei (\texttt{"<nume> (<id>) in restricted zone '...' --- not authorized"}). O persoană recunoscută \emph{și} autorizată nu generează nicio alarmă.
 
-    \item[Armă detectată (tip \texttt{weapon}).] Pentru orice rezultat din detectorul de arme se creează o alarmă \texttt{weapon}, cu severitatea preluată din rezultat (\texttt{r["severity"]}, implicit \texttt{critical}).
+    \item[Armă detectată (tip \texttt{weapon}).] Pentru orice rezultat din detectorul de arme se creează o alarmă \texttt{weapon}, cu severitatea preluată din rezultat \linebreak (\texttt{r["severity"]}, implicit \texttt{critical}).
 
     \item[Foc/fum confirmat (tip \texttt{fire}).] Se creează alarmă \texttt{fire} \emph{doar} pentru rezultatele care au \emph{ambele} câmpuri \texttt{confirmed} și \texttt{alert} adevărate -- adică doar după confirmarea temporală pe fereastră multi-cadru (cerința F4). Severitatea este \texttt{critical} pentru clasa \texttt{fire} și \texttt{high} pentru \texttt{smoke}.
 
-    \item[Acțiune periculoasă (tip \texttt{har}).] Pentru orice rezultat HAR cu \texttt{class != "normal"} (fight, vandalism, fainting etc.) se creează o alarmă \texttt{har}, cu severitatea preluată din rezultat (implicit \texttt{high}) și eticheta acțiunii în descriere.
+    \item[Acțiune periculoasă (tip \texttt{har}).] Pentru orice rezultat HAR cu \texttt{class !=\linebreak "normal"} (fight, vandalism) se creează o alarmă \texttt{har}, cu severitatea preluată din rezultat (implicit \texttt{high}) și eticheta acțiunii în descriere.
 
     \item[Plăcuță neautorizată (tip \texttt{plate}).] Pentru orice rezultat ANPR cu citire OCR validă (numărul plăcuței diferit de \texttt{None}/\texttt{""}/\texttt{"UNKNOWN"}) care \emph{nu} este regăsit pe lista de plăcuțe autorizate, se creează o alarmă \texttt{plate} cu severitate \texttt{high} și descrierea \texttt{"Unauthorized vehicle <plate> detected (...\%)"}, deduplicată pe numărul plăcuței. Rezultatele ANPR sunt în plus \emph{jurnalizate} (prin \texttt{\_log\_detection\_if\_needed} cu tip \texttt{plate} și status \texttt{"authorized"} / \texttt{"unauthorized"}).
 \end{description}
 
 \paragraph*{Notă.} Spre deosebire de regula persoanelor, alarma de plăcuță este \emph{globală} (nu depinde de zona camerei): o plăcuță este considerată neautorizată dacă numărul ei nu apare în baza de date, indiferent de cameră (vezi \S\ref{subsec:cerinte_functionale}, F3 și F7).
 
-\subsubsection{Captura asociată (snapshot)}
+\subsection{Captura asociată (snapshot)}
 
 Când oricare regulă se declanșează pe un cadru, se captează un \emph{snapshot}: cadrul adnotat este redimensionat la o lățime maximă de 400~px, codificat JPEG la calitate 60 și apoi Base64, fiind atașat alarmei (câmpul \texttt{snapshot} din tabela \texttt{alarms}). Calitatea redusă este o decizie deliberată de economisire a spațiului, întrucât snapshot-ul servește doar contextualizării vizuale a alarmei în panoul operatorului.
 
-\subsubsection{Niveluri de severitate și mapping pe tipuri de eveniment}
+\subsection{Niveluri de severitate și mapping pe tipuri de eveniment}
 
-Severitatea este un câmp text pe tabela \texttt{alarms}, cu valoarea implicită \texttt{medium} la nivel de schemă. \emph{Notă de concordanță cu codul:} valorile efectiv produse de logica de alarmare sunt \texttt{critical} și \texttt{high} (nu schema \texttt{info}/\texttt{warning}/\texttt{critical} din specificația inițială); \texttt{medium} rămâne doar ca implicit al coloanei, iar nivelurile inferioare nu sunt emise de detectoare în versiunea curentă. Tabelul~\ref{tab:alarm_mapping} prezintă maparea reală tip-eveniment $\rightarrow$ severitate.
+Severitatea este un câmp text pe tabela \texttt{alarms}, cu valoarea implicită \texttt{medium} la nivel de schemă. Logica de alarmare produce două niveluri efective -- \texttt{critical} și \texttt{high} --, valoarea \texttt{medium} rămânând doar ca implicit al coloanei. Tabelul~\ref{tab:alarm_mapping} prezintă maparea tip-eveniment $\rightarrow$ severitate.
 
 \begin{table}[h]
 \centering
 \caption{Maparea tipurilor de eveniment pe severitate, conform implementării.}
 \label{tab:alarm_mapping}
-\begin{tabular}{lll}
+\begin{tabularx}{\textwidth}{l>{\raggedright\arraybackslash}Xl}
 \hline
 \textbf{Tip alarmă} & \textbf{Condiție de declanșare} & \textbf{Severitate} \\
 \hline
@@ -789,25 +912,32 @@ Severitatea este un câmp text pe tabela \texttt{alarms}, cu valoarea implicită
 \texttt{har} & acțiune $\neq$ \texttt{normal} (fight, vandalism, \dots) & \texttt{high} (din rezultat) \\
 \texttt{plate} & plăcuță neautorizată (OCR valid, negăsită) & \texttt{high} \\
 \hline
-\end{tabular}
+\end{tabularx}
 \end{table}
 
-\subsubsection{Deduplicarea temporală}
+\subsection{Deduplicarea temporală}
 
-Pentru a nu inunda operatorul cu alarme repetate pentru același eveniment continuu, fiecare creare de alarmă trece printr-un mecanism de \textbf{cooldown}. Cheia de deduplicare este tripletul \texttt{(camera\_id, alarm\_type, dedup\_subject)} -- concatenat în forma \texttt{"camera\_id:alarm\_type:subiect"} -- iar fereastra este \texttt{alarm\_cooldown\_seconds = 30}: dacă o alarmă cu aceeași cheie a fost creată în ultimele 30~de secunde, noua declanșare este ignorată. Verificarea și rezervarea slot-ului (actualizarea timestamp-ului) se fac sub \texttt{alarm\_lock}, astfel încât două fire concurente să nu treacă ambele de poartă.
+Pentru a nu inunda operatorul cu alarme repetate pentru același eveniment continuu, fiecare creare de alarmă trece printr-un mecanism de \textbf{cooldown}. Cheia de deduplicare este tripletul \texttt{(camera\_id, alarm\_type, dedup\_subject)} -- concatenat în forma \texttt{"camera\_id:alarm\_type:subiect"} -- iar fereastra este \texttt{alarm\_\linebreak cooldown\_seconds = 30}: dacă o alarmă cu aceeași cheie a fost creată în ultimele 30~de secunde, noua declanșare este ignorată. Verificarea și rezervarea slot-ului (actualizarea timestamp-ului) se fac sub \texttt{alarm\_lock}, astfel încât două fire concurente să nu treacă ambele de poartă.
 
-Componenta \texttt{dedup\_subject} este cea care \emph{distinge} detecțiile concurente de același tip, evitând să le colapseze într-o singură alarmă: persoanele necunoscute sunt diferențiate printr-un \emph{bucket} de poziție al casetei (\texttt{\_bbox\_position\_bucket}), persoanele recunoscute prin \texttt{employee\_id}, armele prin clasă (cuțit vs.\ pistol), acțiunile HAR prin clasa acțiunii, iar plăcuțele prin numărul lor. Consecința -- opusă unei deduplicări pe simpla pereche \texttt{(cameră, tip)} -- este că două persoane necunoscute diferite, apărute simultan pe aceeași cameră, produc \emph{două} alarme distincte, nu una. Dacă \texttt{dedup\_subject} lipsește, mecanismul recade pe deduplicarea per \texttt{(cameră, tip)}, ca mod implicit.
+Componenta \texttt{dedup\_subject} este cea care \emph{distinge} detecțiile concurente de același tip, evitând să le colapseze într-o singură alarmă: persoanele necunoscute sunt diferențiate printr-un \emph{bucket} de poziție al casetei (\texttt{\_bbox\_position\_bucket}), persoanele recunoscute prin \texttt{employee\_id}, acțiunile HAR prin clasa acțiunii, iar plăcuțele prin numărul lor. Armele folosesc drept subiect eticheta clasei returnate de detector; întrucât acesta este antrenat pe o singură clasă (\texttt{weapon}), subiectul este în practică constant, astfel încât alarmele de armă se deduplichează efectiv pe perechea \texttt{(cameră, tip)}. Consecința -- opusă unei deduplicări pe simpla pereche \texttt{(cameră, tip)} -- este că două persoane necunoscute diferite, apărute simultan pe aceeași cameră, produc \emph{două} alarme distincte, nu una. Dacă \texttt{dedup\_subject} lipsește, mecanismul recade pe deduplicarea per \texttt{(cameră, tip)}, ca mod implicit.
 
-Pe lângă poarta din memorie (care se pierde la repornire), există un \textbf{backstop în baza de date}: înainte de a persista o alarmă, sistemul verifică prin \texttt{get\_recent\_alarm} dacă există deja o alarmă recentă, nerezolvată, cu aceeași cheie (inclusiv \texttt{dedup\_subject}, păstrat în metadate), prevenind o rafală de duplicate imediat după ce serverul revine. Pentru comparație, jurnalizarea folosește propriul cooldown, mai scurt și pe subiect explicit (\texttt{log\_cooldown\_seconds = 5}).
+Pe lângă poarta din memorie (care se pierde la repornire), există un \linebreak \textbf{backstop în baza de date}: înainte de a persista o alarmă, sistemul verifică prin \texttt{get\_recent\_alarm} dacă există deja o alarmă recentă, nerezolvată, cu aceeași cheie (inclusiv \texttt{dedup\_subject}, păstrat în metadate), prevenind o rafală de duplicate imediat după ce serverul revine. Pentru comparație, jurnalizarea folosește propriul cooldown, mai scurt și pe subiect explicit (\texttt{log\_cooldown\_\linebreak seconds = 5}).
 
-\textit{[Diagramă: \textbf{diagramă de tip flowchart} a deciziei de alarmare pentru un cadru: intrare = rezultatele agregate $\rightarrow$ ramuri de decizie pentru fiecare tip (necunoscut? zonă restricționată? armă? foc confirmat? acțiune anormală? plăcuță neautorizată?) $\rightarrow$ atribuire severitate $\rightarrow$ construire \texttt{dedup\_subject} $\rightarrow$ verificare cooldown 30~s pe \texttt{(cameră, tip, subiect)} + backstop DB $\rightarrow$ persistare. Marcați faptul că plăcuța neautorizată duce \emph{atât} la alarmă (\texttt{plate}, severitate \texttt{high}), \emph{cât} și la jurnalizare. Plasată în \S\ref{sec:logica_alarme}.]}
+Figura~\ref{fig:flux_alarmare} sintetizează întreaga decizie de alarmare pentru un cadru, de la rezultatele agregate până la persistarea alarmei prin poarta comună de deduplicare.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{diagrama_alarmare.pdf}
+\caption{Diagrama de flux a deciziei de alarmare pentru un cadru. Pornind de la rezultatele agregate în firul de fuziune, cele șase verificări sunt evaluate \emph{independent} și secvențial, astfel încât un singur cadru poate genera mai multe alarme. Fiecare ramură stabilește tipul, severitatea și \texttt{dedup\_subject}, după care alarma trece printr-o poartă comună: cooldown de 30~s pe cheia \texttt{(cameră, tip, subiect)} (sub \texttt{alarm\_lock}) și un \emph{backstop} în baza de date împotriva duplicatelor recente nerezolvate, înainte de persistare și difuzare în interfață. }
+\label{fig:flux_alarmare}
+\end{figure}
 
 \section{Proiectarea interfeței utilizator}
 \label{sec:interfata_utilizator}
 
 Interfața utilizator este punctul de contact dintre operator și sistem; ea trebuie să facă vizibile, într-un mod imediat și neambiguu, fluxurile live, alarmele și starea entităților. Frontend-ul este o aplicație React (vezi \S\ref{subsec:client_server}), organizată ca un \emph{single-page application} cu o bară laterală de navigare și un panou central de conținut care comută între ecranele descrise mai jos. Această secțiune prezintă structura de navigare, wireframe-urile ecranelor principale și principiile UX urmărite, raportate la implementarea efectivă din \texttt{frontend/src}.
 
-\subsubsection{Structura de navigare}
+\subsection{Structura de navigare}
 
 Navigarea este controlată de componenta \texttt{Sidebar}, care definește nouă ecrane, fiecare cu un indicator \texttt{adminOnly} ce determină vizibilitatea în funcție de rol (mecanism aliniat cu RBAC-ul din \S\ref{sec:rbac}):
 \begin{itemize}
@@ -816,23 +946,9 @@ Navigarea este controlată de componenta \texttt{Sidebar}, care definește nouă
 \end{itemize}
 Filtrarea elementelor de meniu se face în client (\texttt{allNavItems.filter(item => !item.adminOnly || isAdmin)}), astfel încât un operator cu rol \texttt{user} nu vede deloc rutele de administrare. Aceasta este o protecție de \emph{uzabilitate}, dublată pe server de verificările \texttt{require\_admin} (protecția de securitate propriu-zisă).
 
-\subsubsection{Wireframe-uri pentru ecranele principale}
 
-\textit{[Diagramă: cinci \textbf{wireframe-uri} (schițe low-fidelity, nu capturi de ecran) pentru ecranele de mai jos. Recomand realizarea lor într-un tool de tip Figma/Balsamiq și includerea ca subfiguri într-o singură figură cu \texttt{subcaption}. Plasate în \S\ref{sec:interfata_utilizator}.]}
 
-\begin{description}
-    \item[Login.] Ecran centrat, minimal: logo/iconiță, câmp utilizator, câmp parolă (mascat), buton de autentificare cu stare de încărcare (\texttt{isLoading}) și o zonă de mesaj de eroare afișată sub formularul roșu la credențiale invalide. Implementat în \texttt{Login.js}.
-
-    \item[Dashboard live.] Ecranul principal de operare: un \emph{grid} de camere (\texttt{CameraGrid}) care afișează fluxurile primite prin WebSocket cu detecțiile suprapuse, un indicator de conexiune (\texttt{isConnected}), comutatoarele pentru modulele AI (pentru admin) și un panou de \emph{activitate recentă} (\texttt{RecentActivity}) actualizat în timp real. Wireframe-ul trebuie să arate zona video dominantă și panoul lateral de evenimente.
-
-    \item[Gestiune entități.] Un șablon comun reutilizat pentru \emph{Persoane}, \emph{Plăcuțe}, \emph{Zone}, \emph{Camere} și \emph{Utilizatori}: bară de acțiuni sus (căutare + buton de adăugare), tabel cu înregistrări la mijloc, acțiuni pe rând (editează/șterge) la dreapta, și un formular modal pentru creare/editare. Wireframe-ul ales ca reprezentativ poate fi \emph{Person Management} (\texttt{PersonManagement.js}), cu sub-formularul de înregistrare cu imagini.
-
-    \item[Alarme.] Listă de alarme (\texttt{AlarmManagement}) cu filtre pe status, tip și severitate, fiecare alarmă afișând snapshot-ul, severitatea colorată, camera și timestamp-ul, plus acțiuni de rezolvare (individual și în masă) și un câmp de note. Wireframe-ul trebuie să evidențieze codarea cromatică a severității și butoanele de triere.
-
-    \item[Statistici.] Pagină cu grafice agregate (\texttt{Statistics}) alimentate din endpoint-urile \texttt{/api/logs/stats}, \texttt{timeseries} și \texttt{breakdown}: evoluția în timp a detecțiilor, distribuția pe tipuri și pe camere. Wireframe-ul arată o grilă de carduri cu grafice.
-\end{description}
-
-\subsubsection{Principii UX}
+\subsection{Principii UX}
 
 \paragraph*{Feedback vizual imediat.} Fiecare acțiune produce un răspuns vizibil: stările \texttt{isLoading} pe butoane în timpul cererilor, mesaje de eroare/succes, indicatorul de conexiune WebSocket (\texttt{isConnected}) pe dashboard, și suprapunerea în timp real a detecțiilor peste fluxul video. Severitatea alarmelor este codată cromatic pentru identificare rapidă.
 
@@ -842,13 +958,5 @@ Filtrarea elementelor de meniu se face în client (\texttt{allNavItems.filter(it
 
 \paragraph*{Layout responsive.} Stilizarea cu Tailwind folosește clase responsive (\texttt{sm:}, \texttt{md:}, \texttt{lg:}, \texttt{grid-cols-*}) în toate componentele majore, astfel încât interfața să fie utilizabilă atât pe stația fixă a dispecerului, cât și pe dispozitive mobile pentru supraveghere de la distanță (cerința NF8).
 
-\subsubsection{Limitări identificate față de cerințe}
-
-Verificarea codului relevă două abateri de la cerințele de uzabilitate (NF8) care trebuie consemnate onest:
-\begin{itemize}
-    \item \textbf{Limba interfeței.} Cerința NF8 prevede o interfață \emph{în limba română}, însă implementarea curentă are textele în \textbf{engleză} (etichete de meniu precum \emph{Person Management}, mesaje de confirmare de tip \texttt{Are you sure you want to delete\dots}, placeholder-e de tip \texttt{Enter full name}). Internaționalizarea sau traducerea integrală în română rămâne o sarcină deschisă.
-    \item \textbf{Sortare controlată de utilizator.} Principiul de \emph{sortare consistentă în toate tabelele} este doar parțial îndeplinit: nu există în cod o sortare interactivă (click pe antetul coloanei), ci doar o \emph{ordonare implicită} pe server, descrescătoare după dată (susținută de indexul \texttt{idx\_detlogs\_created\_at} din \S\ref{sec:proiectare_db}). Adăugarea sortării interactive pe coloane este o îmbunătățire de uzabilitate identificată.
-\end{itemize}
-Aceste limitări sunt reluate în analiza din Capitolul~\ref{ch:testare}.
 
 \end{document}

@@ -1,0 +1,93 @@
+@startuml websocket_sequence
+' Diagrama de secventa UML - ciclul de viata al unei conexiuni WebSocket (S4.5, sec:proiectare_websocket)
+
+skinparam shadowing false
+skinparam backgroundColor transparent
+skinparam defaultFontName Serif
+skinparam defaultFontSize 13
+skinparam ArrowColor #555555
+skinparam ArrowFontColor #333333
+skinparam SequenceMessageAlignment center
+
+skinparam sequence {
+  LifeLineBorderColor #888888
+  LifeLineBackgroundColor #F4F6FB
+
+  ParticipantBorderColor #333333
+  ParticipantBackgroundColor #EAF1FB
+  ParticipantFontColor #111111
+  ParticipantFontStyle bold
+
+  ActorBorderColor #333333
+  ActorBackgroundColor #EAF1FB
+  ActorFontColor #111111
+
+  GroupBorderColor #5A6B8C
+  GroupBackgroundColor #FFFFFF
+  GroupHeaderFontColor #111111
+  DividerBackgroundColor #EAF1FB
+  DividerBorderColor #5A6B8C
+  DividerFontColor #111111
+}
+
+skinparam note {
+  BorderColor #B0792C
+  BackgroundColor #FFF3E0
+  FontColor #111111
+  FontSize 11
+}
+
+actor "Client\n(browser)" as Client
+participant "Endpoint\n/ws" as WS
+participant "Coada proprie\n<size:10>client_queues[ws]</size>" as Q
+participant "Firul de fuziune\n<size:10>_broadcast_frame</size>" as Fusion
+
+== Autentificare ==
+
+Client -> WS : conectare\nws://host/ws?token=<JWT>
+activate WS
+WS -> WS : jwt.decode(token)\nre-validare cont fata de DB
+
+alt token lipsa / invalid / expirat / cont sters
+    WS --> Client : close(1008)
+    note right of WS : conexiune refuzata\ninainte de accept()
+    deactivate WS
+else token valid
+    == Handshake ==
+    WS -> Client : await websocket.accept()
+
+    == Alocare coada proprie ==
+    create Q
+    WS -> Q : queue.Queue(maxsize=output_queue_maxsize)
+    WS -> WS : client_queues[ws] = coada
+    note over WS, Q : model broadcast unu-la-multi:\nfiecare client are coada proprie
+
+    == Bucla de transmitere (~30 FPS) ==
+
+    par firul de fuziune produce cadre
+        loop pentru fiecare cadru procesat
+            Fusion -> Q : _broadcast_frame(message)\nput(block=False)
+            note right of Q : politica drop-oldest\nla coada plina
+        end
+    else bucla endpoint-ului consuma cadre
+        loop cat timp conexiunea este activa
+            WS -> Q : get(block=False)
+            alt mesaj disponibil
+                Q --> WS : message (type: video_frame)
+                WS -> Client : send_text(json.dumps(message))
+            else queue.Empty
+                note right of WS : nu blocheaza, continua
+            end
+            WS -> WS : await asyncio.sleep(0.03)
+        end
+    end
+
+    == Deconectare ==
+    Client ->x WS : WebSocketDisconnect
+    WS -> Q : client_queues.pop(ws, None)
+    destroy Q
+    note right of WS : eliminare din dictionar\n(bloc finally)
+    deactivate WS
+end
+
+@enduml
