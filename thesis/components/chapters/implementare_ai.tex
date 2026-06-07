@@ -289,7 +289,7 @@ execuție dedicat (\textit{Thread~3}).
 \subsection{Detecția plăcuțelor cu YOLOv8}
 \label{subsec:detectie_placute}
 
-Localizarea plăcuțelor în cadru este realizată cu ajutorul unui model YOLOv8, instanțiat prin intermediul clasei \inlinecode{YOLO} din pachetul \inlinecode{ultralytics}, pe baza fișierului de ponderi \inlinecode{models/license\_plate/best.pt}. Acesta reprezintă o variantă pre-antrenată, dedicată exclusiv detecției plăcuțelor de înmatriculare (având definită o singură clasă, \inlinecode{license\_plate}). Modelul a fost integrat în sistem în forma sa originală, fără a necesita o etapă suplimentară de antrenare (\emph{fine-tuning}) în cadrul acestui proiect. La momentul inițializării, pentru a optimiza viteza de inferență, sistemul verifică disponibilitatea mediului CUDA și, în caz afirmativ, transferă execuția modelului pe unitatea GPU.
+Localizarea plăcuțelor în cadru este realizată cu ajutorul unui model YOLOv8, instanțiat prin intermediul clasei \inlinecode{YOLO} din pachetul \inlinecode{ultralytics}, pe baza fișierului de ponderi \inlinecode{models/license\_plate/best.pt}. Modelul de bază utilizat este \inlinecode{harshitsingh09/yolov8-license-plate-detector}, o variantă a arhitecturii YOLOv8 publicată pe platforma Kaggle și dedicată exclusiv detecției plăcuțelor de înmatriculare (având definită o singură clasă, \inlinecode{license\_plate}). Modelul a fost integrat în sistem în forma sa originală, fără a necesita o etapă suplimentară de antrenare (\emph{fine-tuning}) în cadrul acestui proiect. La momentul inițializării, pentru a optimiza viteza de inferență, sistemul verifică disponibilitatea mediului CUDA și, în caz afirmativ, transferă execuția modelului pe unitatea GPU.
 
 Pentru fiecare cadru procesat, metoda \inlinecode{process\_frame()} apelează funcția \inlinecode{predict()} utilizând parametrul \inlinecode{imgsz=640} și un prag de confidență \inlinecode{conf=0.25}, extrăgând astfel casetele de încadrare candidate (\emph{bounding boxes}). Fiecare casetă, definită prin coordonatele \inlinecode{[x1, y1, x2, y2]}, este ulterior \textit{extinsă} cu 20\% în toate direcțiile prin intermediul funcției \inlinecode{expand\_bbox()} (utilizând un coeficient \inlinecode{pad\_ratio} de \inlinecode{0.20}). Această margine de siguranță mai generoasă garantează includerea limitelor fizice ale plăcuței alături de un context vizual minim, prevenind astfel decuparea accidentală a caracterelor aflate la extremități înaintea evaluării OCR. Regiunea decupată rezultată este transmisă etapelor ulterioare de prelucrare.
 
@@ -390,18 +390,14 @@ Provocarea principală a acestui modul nu constă în detecția propriu-zisă, c
 \subsection{Modelul YOLOv10 pre-antrenat}
 \label{subsec:yolov10_preantrenat}
 
-Modelul de bază utilizat este \inlinecode{TommyNgx/YOLOv10-Fire-and-Smoke-Detection}, o variantă a arhitecturii YOLOv10 publicată pe platforma HuggingFace și antrenată specific pentru cele două clase de interes: \inlinecode{Fire} și \inlinecode{Smoke}. Modelul este integrat în sistem în forma sa originală, nefiind necesară o etapă suplimentară de reantrenare (\emph{fine-tuning}), și este instanțiat prin intermediul clasei \inlinecode{YOLO} (din pachetul \inlinecode{ultralytics}) pe baza fișierului de ponderi \inlinecode{models/fire\_and\_smoke/best.pt}. Imediat după încărcare, denumirile claselor sunt normalizate prin convertirea literelor în minuscule (\inlinecode{fire}, \inlinecode{smoke}), asigurând astfel o utilizare consecventă în restul fluxului de prelucrare.
+Modelul de bază utilizat este \inlinecode{TommyNgx/YOLOv10-Fire-and-Smoke-Detection}, o variantă a arhitecturii YOLOv10 publicată pe platforma HuggingFace și antrenată specific pentru cele două clase de interes: \inlinecode{Fire} și \inlinecode{Smoke}. Modelul este integrat în sistem în forma sa originală, nefiind necesară o etapă suplimentară de reantrenare (\emph{fine-tuning}), și este instanțiat prin intermediul clasei \inlinecode{YOLO} (din pachetul \inlinecode{ultralytics}) pe baza fișierului de ponderi \inlinecode{models/fire\_and\_smoke/} \inlinecode{best.pt}. Imediat după încărcare, denumirile claselor sunt normalizate prin convertirea literelor în minuscule (\inlinecode{fire}, \inlinecode{smoke}), asigurând astfel o utilizare consecventă în restul fluxului de prelucrare.
 
 La nivelul fiecărui cadru, metoda \inlinecode{process\_frame()} execută funcția \linebreak \inlinecode{model.predict()} utilizând un prag de confidență egal cu \textit{cea mai mică} valoare dintre pragurile definite per clasă, alături de un prag IoU de \inlinecode{0.45} pentru algoritmul de suprimare a non-maximelor (NMS). Această abordare a fost aleasă în mod deliberat: modelului i se permite să returneze toate detecțiile candidate care depășesc pragul minim de confidență, urmând ca filtrarea riguroasă la nivel de clasă să fie aplicată ulterior, în mod explicit, de către mecanismul de procesare. Această arhitectură oferă un control deplin asupra procesului decizional de declanșare a alertelor.
 
 \subsection{Pipeline-ul de filtrare în cinci niveluri}
 \label{subsec:pipeline_filtrare}
 
-Fiecare detecție candidată returnată de YOLOv10 parcurge, în ordine, cinci niveluri de
-filtrare. O detecție trebuie să treacă de toate cele cinci niveluri pentru a deveni o alertă;
-eșecul la oricare nivel o elimină (sau, în cazul confirmării temporale, o reține ca neconfirmată
-încă). Statisticile interne (\inlinecode{rejected\_by\_size}, \inlinecode{rejected\_by\_color}
-etc.) contorizează câte detecții sunt respinse la fiecare nivel.
+Fiecare rezultat candidat furnizat de modelul YOLOv10 parcurge, în mod secvențial, cinci niveluri de filtrare. Pentru ca o detecție să fie validată și transformată în alertă, aceasta trebuie să îndeplinească cerințele tuturor celor cinci etape; neîndeplinirea criteriilor la oricare dintre aceste niveluri atrage respingerea automată a detecției (sau, în cazul specific al filtrului temporal, reținerea acesteia în starea de detecție aflată în curs de confirmare). Sistemul menține o serie de statistici interne (precum \inlinecode{rejected\_by\_size}, \inlinecode{rejected\_by\_color} etc.) pentru a contoriza cu precizie numărul detecțiilor invalidate la nivelul fiecărui filtru.
 
 \subsubsection{Praguri de încredere per clasă}
 \label{subsubsec:praguri_incredere}
@@ -415,124 +411,62 @@ nori, abur) decât focul, care are o semnătură vizuală mai distinctivă. O de
 \subsubsection{Filtre de dimensiune}
 \label{subsubsec:filtre_dimensiune}
 
-Al doilea nivel verifică plauzibilitatea dimensiunii bounding box-ului, raportată la aria
-cadrului. Sunt respinse atât detecțiile neglijabil de mici (sub \inlinecode{0.3\%} din cadru --
-tipic zgomot sau reflexii punctuale), cât și cele excesiv de mari (peste \inlinecode{85\%} din
-cadru -- tipic o clasificare greșită care ``acoperă'' aproape întreaga imagine). Doar
-detecțiile cu o arie relativă în intervalul $[0{,}003;\ 0{,}85]$ trec mai departe.
+Cel de-al doilea nivel de filtrare evaluează plauzibilitatea dimensională a casetei de încadrare, raportând suprafața acesteia la aria totală a cadrului. Sunt respinse atât detecțiile cu o suprafață neglijabilă (sub \inlinecode{0.3\%} din imagine, care reprezintă de obicei zgomot vizual sau reflexii punctuale), cât și cele disproporționat de mari (peste \inlinecode{85\%} din cadru, indicând tipic o clasificare eronată care se extinde pe aproape întreaga suprafață vizuală). Astfel, sunt validate și transmise etapei următoare exclusiv detecțiile a căror arie relativă se încadrează în intervalul matematic $[0{,}003, 0{,}85]$.
 
 \subsubsection{Verificarea cromatică HSV}
 \label{subsubsec:verificare_hsv}
 
-Al treilea nivel este o verificare cromatică euristică, realizată în spațiul de culoare HSV de
-metoda \inlinecode{\_color\_plausible()}, care exploatează faptul că focul și fumul au semnături
-de culoare caracteristice:
+Cel de-al treilea nivel de filtrare constă într-o verificare cromatică euristică, implementată prin intermediul metodei \inlinecode{\_color\_plausible()}. Aceasta operează în spațiul de culoare HSV, exploatând faptul că focul și fumul prezintă semnături cromatice specifice:
 
 \begin{itemize}
-    \item \textbf{Foc} -- regiunea trebuie să conțină o fracție semnificativă de pixeli ``calzi'',
-    saturați și luminoși: nuanțe (\textit{hue}) în jurul roșu-portocaliu-galben (care se
-    încadrează la $h \leq 25$ sau $h \geq 160$, deoarece nuanțele calde se ``înfășoară'' în jurul
-    valorii 0), cu saturație $s \geq 90$ și luminozitate $v \geq 120$. Se cere ca cel puțin
-    \inlinecode{12\%} din pixeli să fie calzi;
-    \item \textbf{Fum} -- regiunea trebuie să fie de saturație redusă și luminozitate moderată:
-    cel puțin \inlinecode{55\%} din pixeli trebuie să fie cenușii (saturație $s \leq 60$ și
-    luminozitate $v \geq 40$, pentru a respinge zonele complet negre). În plus, deviația
-    standard a luminozității trebuie să fie cel puțin $6$, condiție care respinge suprafețele
-    perfect uniforme (cer senin, perete), unde fumul real ar prezenta variație.
+	\item \textbf{Foc}: regiunea analizată trebuie să conțină o pondere semnificativă de pixeli cu nuanțe calde, un grad înalt de saturație și o intensitate luminoasă ridicată. Mai exact, se caută valori ale nuanței (\textit{hue}) din spectrul roșu-portocaliu-galben (situate în intervalele $h \leq 25$ sau $h \geq 160$, compensând astfel dispunerea circulară a valorilor de nuanță în jurul originii), asociate cu o saturație $s \geq 90$ și o luminozitate $v \geq 120$. Condiția de validare impune ca minimum \inlinecode{12\%} din pixelii regiunii să îndeplinească aceste criterii;
+	\item \textbf{Fum}: regiunea trebuie să se caracterizeze printr-o saturație redusă și o luminozitate moderată. Prin urmare, cel puțin \inlinecode{55\%} din pixeli trebuie să aparțină spectrului cenușiu (având o saturație $s \leq 60$ și o luminozitate $v \geq 40$, limită inferioară impusă pentru a exclude zonele de umbră absolută). Suplimentar, abaterea standard a canalului de luminozitate trebuie să depășească valoarea de $6$, o constrângere menită să respingă suprafețele cu o cromatică perfect uniformă (precum cerul senin sau un perete neted), în cadrul cărora un nor de fum real ar induce, în mod inerent, o variație a intensității.
 \end{itemize}
 
-Detecțiile care nu îndeplinesc condiția cromatică a clasei lor sunt respinse, eliminând o mare
-parte din falsele pozitive care ar trece de primele două niveluri.
+Detecțiile care nu satisfac profilul cromatic specific clasei prezise sunt respinse automat. Această etapă elimină o proporție considerabilă a rezultatelor fals pozitive care ar fi putut valida primele două niveluri de filtrare.
 
 \subsubsection{Confirmarea temporală prin tracking IoU}
 \label{subsubsec:confirmare_temporala}
 
-Al patrulea nivel cere persistență în timp: o detecție devine \textit{confirmată} numai dacă
-apare în mod consistent pe cel puțin \inlinecode{6} cadre consecutive. Pentru a urmări o aceeași
-detecție de la un cadru la altul, metoda \inlinecode{\_update\_frame\_history()} asociază
-bounding box-ul curent cu intrările din istoricul de cadre pe baza suprapunerii spațiale
-(IoU $\geq 0{,}3$, calculat de \inlinecode{\_compute\_iou()}), restrânsă la aceeași clasă. Dacă
-se găsește o potrivire, contorul de cadre consecutive al intrării este incrementat; altfel se
-creează o intrare nouă, cu contor 1. Intrările care nu mai sunt observate într-un cadru sunt
-expirate (eliminate), întrerupând astfel seria. Acest mecanism elimină detecțiile tranzitorii
-de un singur cadru (sclipiri, artefacte de compresie), care nu pot reprezenta un incendiu real.
+Cel de-al patrulea nivel de filtrare impune o condiție de persistență temporală: o detecție devine \textit{confirmată} exclusiv dacă este identificată în mod constant pe parcursul a cel puțin \inlinecode{6} cadre consecutive. Pentru a asigura trasabilitatea unei detecții între cadre succesive, metoda \inlinecode{\_update\_frame\_history()} corelează caseta de încadrare curentă cu înregistrările din istoricul temporal, utilizând ca metrică suprapunerea spațială (IoU $\geq 0{,}3$, calculată prin funcția \inlinecode{\_compute\_iou()}), cu obligativitatea apartenenței la aceeași clasă. În cazul identificării unei corespondențe, contorul de apariții consecutive al înregistrării este incrementat; în caz contrar, sistemul inițializează o intrare nouă, având contorul setat la valoarea 1. Instanțele care nu mai sunt detectate în cadrul analizat sunt invalidate și eliminate din istoric, întrerupând astfel continuitatea secvenței. Acest mecanism exclude cu succes detecțiile efemere (cum ar fi sclipirile luminoase de scurtă durată sau artefactele de compresie video), care apar izolat și nu pot indica prezența unui incendiu real.
 
 \subsubsection{Cooldown de alertă pe locație}
 \label{subsubsec:cooldown}
 
-Al cincilea nivel previne inundarea cu alerte repetate pentru același eveniment. Odată ce o
-detecție este confirmată, se generează o alertă numai dacă a trecut suficient timp de la ultima
-alertă pentru \textit{aceeași locație}. Locația este aproximată printr-o cheie grosieră,
-construită din clasa detecției și din coordonatele colțului împărțite la 40
-(\inlinecode{class\_name\_x1//40\_y1//40}), astfel încât detecții ușor deplasate să fie tratate
-ca aceeași sursă. Intervalul minim de cooldown între două alerte la aceeași locație este de
-\inlinecode{3} secunde. Astfel, un incendiu persistent generează o alertă inițială și apoi
-reamintiri rare, în loc de o avalanșă de alerte la fiecare cadru.
+Cel de-al cincilea nivel de filtrare previne saturarea sistemului cu alerte redundante generate de același eveniment. Odată ce o detecție dobândește starea de \textit{confirmată}, o nouă alertă este emisă exclusiv dacă a expirat un interval de timp prestabilit de la ultima notificare asociată \textit{aceleiași locații}. Identificarea spațială este aproximată printr-o cheie de indexare simplificată, construită din eticheta clasei și coordonatele punctului de origine, divizate printr-o împărțire întreagă la un factor de 40 (\inlinecode{class\_name\_x1//40\_y1//40}). Această cuantificare a spațiului asigură faptul că detecțiile care prezintă fluctuații minore de poziție sunt atribuite aceleiași surse. Intervalul minim de latență între două alerte consecutive pentru o locație identică este setat la \inlinecode{3} secunde. Prin această metodă, un eveniment persistent declanșează o alertă inițială, urmată de notificări recurente controlate, evitându-se astfel o suprasarcină de avertizări la procesarea fiecărui cadru.
 
 \subsection{Flag-urile \textit{confirmed} și \textit{alert}}
 \label{subsec:flaguri}
 
-Fiecare detecție returnată de \inlinecode{process\_frame()} poartă două flag-uri booleene care
-codifică rezultatul pipeline-ului de filtrare și care au roluri distincte:
+Fiecare predicție returnată de metoda \inlinecode{process\_frame()} este însoțită de doi indicatori de stare (valori booleene), care codifică rezultatul fluxului de filtrare și care îndeplinesc roluri funcționale distincte:
 
 \begin{itemize}
-    \item \inlinecode{confirmed} -- adevărat când detecția a trecut de primele patru niveluri și
-    a atins pragul de persistență temporală (cel puțin 6 cadre consecutive). O detecție confirmată
-    este considerată un eveniment real și este \textit{desenată} pe cadru; candidații neconfirmați
-    nu sunt afișați, evitând clipirea vizuală a casetelor nesigure;
-    \item \inlinecode{alert} -- adevărat doar în cadrul în care o detecție confirmată trece și de
-    nivelul de cooldown, marcând momentul precis în care trebuie generată o \textit{alarmă} (de
-    exemplu, înregistrarea în baza de date și notificarea prin WebSocket). Vizual, o detecție cu
-    \inlinecode{alert} este desenată cu un chenar mai gros, iar la nivel de cadru se afișează un
-    banner ``FIRE ALERT''.
+	\item \inlinecode{confirmed}: capătă valoarea de adevăr atunci când detecția a validat primele patru niveluri și a atins pragul de persistență temporală (minimum \inlinecode{6} cadre consecutive). O astfel de predicție este tratată drept un eveniment real și este \textit{reprezentată grafic} pe cadru; rezultatele candidate neconfirmate sunt ascunse, prevenind astfel fluctuația vizuală (afișarea intermitentă) a casetelor incerte;
+	\item \inlinecode{alert}: este evaluat ca adevărat exclusiv în cadrul în care o predicție confirmată îndeplinește și condiția intervalului de latență, semnalând momentul exact pentru declanșarea unei \textit{alarme} (spre exemplu, înregistrarea în baza de date și transmiterea unei notificări prin protocolul WebSocket). La nivelul interfeței, o detecție marcată prin indicatorul \inlinecode{alert} este evidențiată printr-un chenar îngroșat, fiind însoțită de un mesaj de avertizare de tipul \textbf{FIRE ALERT} suprapus pe cadru.
 \end{itemize}
 
-Distincția dintre cele două flag-uri separă astfel \textit{starea} (există foc/fum confirmat în
-acest cadru?) de \textit{evenimentul} (trebuie declanșată acum o alarmă?), permițând afișarea
-continuă a detecțiilor confirmate fără a genera alarme redundante.
+Această decuplare a indicatorilor separă \textit{starea} sistemului (prezența validată a focului sau a fumului în cadrul curent) de \textit{evenimentul} de notificare (necesitatea declanșării imediate a unei alarme). Abordarea permite afișarea continuă a focarelor confirmate, eliminând totodată riscul generării unor alerte redundante.
 
 \section{Modulul de detecție a armelor (model fine-tuned propriu)}
 \label{sec:modul_arme}
 
-Spre deosebire de modulele anterioare, care folosesc modele pre-antrenate preluate ca atare,
-modulul de detecție a armelor se bazează pe un model YOLOv8 \textit{fine-tuned} în cadrul
-proiectului, pe un set de date construit special pentru această sarcină. Motivul este lipsa
-unui model public suficient de robust pentru detecția generică a armelor în context de
-supraveghere. Această secțiune descrie întregul proces, de la deciziile de proiectare
-(o singură clasă, alegerea modelului de bază), prin construcția și unificarea setului de date,
-până la parametrii de antrenare și analiza rezultatelor. Pipeline-ul de antrenare este organizat
-în trei scripturi numerotate, rulate în ordine: \inlinecode{01\_download\_datasets.py},
-\inlinecode{02\_relabel\_and\_merge.py} și \inlinecode{03\_train\_yolo.py}.
+Spre deosebire de componentele anterioare, care integrează modele pre-antrenate în forma lor originală, modulul dedicat detecției de arme se fundamentează pe o arhitectură YOLOv8 reantrenată (\textit{fine-tuned}) integral în cadrul acestui proiect, utilizând un set de date construit special pentru această sarcină. Această decizie a fost motivată de absența unui model public suficient de robust pentru identificarea generică a armelor în scenariile de supraveghere video. Prezenta secțiune detaliază întregul flux de dezvoltare, pornind de la deciziile de proiectare (precum definirea unei singure clase de interes și selecția arhitecturii de bază), continuând cu etapa de colectare și uniformizare a setului de date, și finalizându-se cu parametrizarea procesului de antrenare și evaluarea rezultatelor obținute. Fluxul de antrenare este structurat modular în trei scripturi, executate secvențial: \inlinecode{01\_download\_datasets.py}, \inlinecode{02\_relabel\_and\_merge.py} și \inlinecode{03\_train\_yolo.py}.
 
 \subsection{Justificarea unei singure clase \textit{weapon}}
 \label{subsec:justificare_clasa_unica}
 
-Modelul este antrenat să recunoască o \textit{singură} clasă generică, \inlinecode{weapon},
-care acoperă deopotrivă arme de foc (pistoale, puști), arme albe (cuțite, macete) și obiecte
-contondente (bâte de baseball). Decizia de a colapsa toate tipurile de arme într-o singură clasă
-este motivată practic: în contextul unui sistem de supraveghere, ceea ce contează este
-\textit{prezența} unei arme în cadru, nu categoria ei exactă. Această simplificare reduce
-problema de clasificare la una de detecție binară (armă / non-armă), permite modelului să
-generalizeze mai bine pe exemple noi și elimină confuziile inutile între subtipuri de arme, care
-oricum ar declanșa aceeași alertă.
+Modelul este antrenat să recunoască o singură clasă generică, \inlinecode{weapon}, care acoperă deopotrivă arme de foc (pistoale, puști), arme albe (cuțite, macete) și obiecte contondente (bâte de baseball). Decizia de a grupa toate tipurile de arme într-o singură clasă este motivată practic: în contextul unui sistem de supraveghere, ceea ce contează este \textit{prezența} unei arme în cadru, nu categoria ei exactă. Această abordare reduce problema de clasificare la una de detecție binară (armă / non-armă), permite modelului să generalizeze mai bine pe date noi și elimină confuziile între subtipuri de arme, care oricum ar declanșa același tip de alertă.
 
 \subsection{Selectarea modelului de bază}
 \label{subsec:model_baza}
 
-Modelul de bază ales pentru fine-tuning este \textbfit{YOLOv8m} (varianta \textit{medium}),
-pre-antrenat pe datasetul COCO. Această variantă oferă un echilibru bun între acuratețe și
-viteză de inferență: este suficient de expresivă pentru a învăța semnătura vizuală variată a
-armelor, dar suficient de ușoară pentru a rula în timp real, alături de celelalte modele, pe
-același GPU. Fine-tuning-ul pornește de la greutățile COCO (\inlinecode{pretrained=True}),
-beneficiind astfel de reprezentările vizuale generice deja învățate, peste care se adaptează
-detectorul la noua clasă.
+Modelul de bază ales pentru antrenarea suplimentară (\textit{fine-tuning}) este \linebreak \textbfit{YOLOv8m} (varianta \textit{medium}), pre-antrenat pe setul de date COCO. Această variantă oferă un echilibru bun între acuratețe și viteză de inferență: este suficient de complexă pentru a învăța formele variate ale armelor, dar suficient de ușoară pentru a rula în timp real, alături de celelalte modele, pe același GPU. Procesul pornește de la ponderile COCO (\inlinecode{pretrained=True}), beneficiind astfel de trăsăturile vizuale generice deja învățate, pe baza cărora detectorul se adaptează la noua clasă.
+
 
 \subsection{Dataseturile utilizate}
 \label{subsec:dataseturi_arme}
 
-Întrucât niciun dataset public unic nu acoperea satisfăcător diversitatea de arme, condiții de
-iluminare și perspective dorite, au fost combinate două seturi de date publice, descărcate
-automat de scriptul \inlinecode{01\_download\_datasets.py}:
+Deoarece niciun set de date public nu oferea, în mod individual, o acoperire suficientă pentru diversitatea tipurilor de arme, a condițiilor de iluminare și a perspectivelor necesare, s-a decis combinarea a două seturi de date independente. Acestea au fost preluate automat prin intermediul scriptului \inlinecode{01\_download\_datasets.py}:
 
 \begin{itemize}
     \item \textbf{Dangerous Items} (Zenodo) -- 8.478 de imagini, cu cinci clase originale, toate
@@ -652,9 +586,7 @@ Modelul atinge o precizie de $93{,}7\%$ și o sensibilitate de $89{,}4\%$, cu un
 $0{,}947$. Valoarea mAP@$0{,}5{:}0{,}95$ (media mAP peste praguri IoU de la $0{,}5$ la $0{,}95$)
 este de $0{,}700$, indicând o localizare bună, deși mai puțin precisă la pragurile IoU foarte
 stricte -- comportament tipic pentru detecția unor obiecte cu forme și orientări foarte variate,
-cum sunt armele. Pe lângă greutăți, antrenarea a produs și artefacte de diagnostic (curbele
-precizie-sensibilitate, matricea de confuzie, curbele de pierdere), salvate în directorul de
-ieșire al rulării.
+cum sunt armele.
 
 \subsection{Discuție asupra rezultatelor}
 \label{subsec:discutie_arme}
