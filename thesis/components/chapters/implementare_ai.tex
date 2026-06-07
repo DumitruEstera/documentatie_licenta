@@ -50,14 +50,12 @@ abordarea tradițională, ar fi necesitat încărcarea și apelarea separată:
 
 Alegerea variantei \inlinecode{buffalo\_s} (în locul, de exemplu, a variantei
 \inlinecode{buffalo\_sc}) este motivată tehnic: rețeaua de recunoaștere
-\inlinecode{w600k\_mbf} este identică în ambele pachete, astfel încât embeddings-urile
-de 512 dimensiuni rămân compatibile, însă \inlinecode{buffalo\_s} include și capul
-\inlinecode{genderage}, indispensabil pentru analiza demografică
-(secțiunea~\ref{sec:analiza_demografica}). Fără acest cap, estimările de vârstă și gen
-ar fi returnate ca \inlinecode{None}.
+\inlinecode{w600k\_mbf} este identică în ambele pachete, astfel încât embedding-urile
+de 512 dimensiuni rămân compatibile, însă \inlinecode{buffalo\_s}  include modulul suplimentar \texttt{genderage}, indispensabil pentru analiza demografică
+(secțiunea~\ref{sec:analiza_demografica}). În lipsa acestui modul de predicție, estimările privind vârsta și genul ar fi indisponibile, sistemul returnând valoarea \texttt{None}.
 
 Pentru fiecare cadru, metoda \inlinecode{process\_frame()} apelează
-\inlinecode{self.face\_app.get(frame)}, care efectuează într-o singură trecere
+\inlinecode{self.face\_app.} \inlinecode{get(frame)}, care efectuează într-o singură trecere
 detecția tuturor fețelor și, pentru fiecare, calculează bounding box-ul,
 landmark-urile, embedding-ul L2-normalizat (\inlinecode{normed\_embedding}, vector
 de 512 de elemente de tip \inlinecode{float32}) și estimările de vârstă și gen.
@@ -66,11 +64,10 @@ convertit în formatul \inlinecode{(x, y, w, h)} și ancorat în limitele cadrul
 metoda statică \inlinecode{\_bbox\_xyxy\_to\_xywh()}, pentru a evita decupaje în
 afara imaginii.
 
-\paragraph{Configurarea execuției pe GPU.}
-Inferența InsightFace rulează pe GPU prin runtime-ul ONNX, providerul
+\subsubsection{Configurarea execuției pe GPU}
+Inferența InsightFace rulează pe GPU prin runtime-ul ONNX, providerul \linebreak
 \inlinecode{CUDAExecutionProvider} fiind configurat explicit cu opțiunea
-\inlinecode{cudnn\_conv\_algo\_search="HEURISTIC"}. Această opțiune este o decizie
-de implementare importantă în contextul arhitecturii multi-threaded a aplicației:
+\inlinecode{cudnn\_conv\_algo\_} \inlinecode{search="HEURISTIC"}. Această opțiune este o decizie de implementare importantă în contextul arhitecturii multi-threaded a aplicației:
 strategia implicită, \inlinecode{EXHAUSTIVE}, măsoară empiric timpul fiecărui
 algoritm de convoluție folosind mecanismul de \textit{stream capture} al CUDA. Cum
 InsightFace rulează concurent cu modelele PyTorch (YOLO pentru plăcuțe, foc și arme,
@@ -80,27 +77,19 @@ when stream is capturing''}. Varianta \inlinecode{HEURISTIC} selectează algorit
 baza unor euristici, fără benchmarking și deci fără captură, eliminând coliziunile
 între firele de execuție.
 
-\paragraph{Gestionarea bibliotecilor CUDA și a TensorFlow.}
+\subsubsection{Gestionarea bibliotecilor CUDA și a TensorFlow}
 La importul modulului, funcția \inlinecode{\_preload\_nvidia\_pypi\_libs()}
 preîncarcă explicit, prin \inlinecode{ctypes.CDLL(..., RTLD\_GLOBAL)}, bibliotecile
 partajate CUDA, cuDNN și cuBLAS livrate în pachetele pip \inlinecode{nvidia-*-cu12},
-astfel încât \inlinecode{onnxruntime} să le poată găsi fără a necesita setarea
-manuală a variabilei \inlinecode{LD\_LIBRARY\_PATH}. În plus, TensorFlow (folosit
+astfel încât \linebreak \inlinecode{onnxruntime} să le poată găsi fără a necesita setarea
+manuală a variabilei \linebreak \inlinecode{LD\_LIBRARY\_PATH}. În plus, TensorFlow (folosit
 de modelul de emoții) este forțat să nu folosească GPU-ul prin
 \inlinecode{set\_visible\_devices([], "GPU")}, deoarece menținerea lui pe GPU
-provoacă conflicte de context CUDA cu \inlinecode{onnxruntime-gpu} și segmentation
+provoacă conflicte de context CUDA cu \inlinecode{onnxruntime} \inlinecode{-gpu} și segmentation
 fault la inițializare.
 
-\paragraph{Înregistrarea persoanelor.}
-Embeddings-urile persoanelor cunoscute sunt generate în momentul înregistrării.
-Metoda \inlinecode{register\_person()} primește o listă de imagini faciale, rulează
-InsightFace pe fiecare imagine (selectând, în cazul detecției mai multor fețe, pe cea
-cu aria bounding box-ului cea mai mare prin \inlinecode{\_extract\_single\_face()}),
-extrage embedding-ul de 512 de dimensiuni și îl persistă atât în baza de date, cât și
-în indexul FAISS. Pentru încărcarea de imagini prin interfața web,
-metoda \inlinecode{extract\_embedding\_from\_image()} acceptă doar imaginile care
-conțin exact o singură față detectabilă, evitând astfel asocierea ambiguă a unui
-embedding cu o persoană.
+\subsubsection{Înregistrarea persoanelor}
+Embedding-urile persoanelor cunoscute sunt generate în momentul înregistrării acestora în sistem. Metoda \inlinecode{register\_person()} primește o listă de imagini faciale și execută modelul InsightFace pe fiecare dintre ele. În situația în care sunt detectate mai multe fețe într-o imagine, sistemul o selectează pe cea cu aria maximă a casetei de încadrare (\emph{bounding box}), prin intermediul funcției \inlinecode{\_extract\_single\_face()}. Ulterior, este extras \emph{embedding}-ul de 512 dimensiuni, care va fi stocat atât în baza de date, cât și în indexul FAISS. Pentru încărcările de imagini efectuate prin interfața web, metoda \inlinecode{extract\_embedding\_} \inlinecode{from\_image()} acceptă exclusiv imaginile care conțin o singură față detectabilă, prevenind astfel riscul asocierii ambigue a unui \emph{embedding} cu o persoană.
 
 \subsection{Indexarea cu FAISS FlatL2}
 \label{subsec:indexare_faiss}
@@ -114,39 +103,27 @@ folosind distanța euclidiană L2 între vectorul de interogare și fiecare vect
 index. Spre deosebire de indecșii aproximativi (precum IVFFlat), căutarea exactă nu
 necesită o etapă de antrenare și garantează găsirea celui mai apropiat vecin; aceasta
 este alegerea potrivită pentru dimensiunea tipică a unei baze de angajați, unde numărul
-de embeddings este suficient de mic încât căutarea liniară să rămână instantanee.
+de embedding-uri este suficient de mic încât căutarea liniară să rămână instantanee.
 
-\paragraph{Maparea identităților.}
+\subsubsection{Maparea identităților}
 FAISS operează cu indici poziționali interni (0, 1, 2, \dots), nu cu identificatorii
 persoanelor din baza de date. De aceea, clasa \inlinecode{FaissIndex} menține două
 dicționare de mapare: \inlinecode{id\_map}, care asociază fiecărui index FAISS un
 \inlinecode{person\_id}, și \inlinecode{reverse\_id\_map}, care leagă fiecare
 \inlinecode{person\_id} de lista de indici corespunzători (o persoană poate avea mai
-multe embeddings, câte unul pentru fiecare imagine de înregistrare).
+multe embedding-uri, câte unul pentru fiecare imagine înregistrată).
 
-\paragraph{Persistența și reconstrucția indexului.}
-Indexul FAISS este o structură în memorie; sursa de adevăr a embeddings-urilor este
-baza de date PostgreSQL. În tabelul \inlinecode{face\_embeddings}, fiecare embedding
-este stocat în coloana \inlinecode{embedding} de tip \inlinecode{BYTEA}, serializat cu
-\inlinecode{pickle}. La pornirea sistemului, metoda \inlinecode{\_load\_embeddings\_from\_db()}
-preia toate embeddings-urile prin \inlinecode{get\_all\_embeddings()} și reconstruiește
-indexul de la zero apelând \inlinecode{rebuild\_index()}. Această reconstrucție este
-declanșată din nou ori de câte ori se înregistrează, se editează sau se șterge o
-persoană, asigurând consistența între baza de date și index. Metoda de încărcare
-include și o protecție împotriva embeddings-urilor reziduale: dacă primul vector are o
-dimensiune diferită de 512 (de exemplu, embeddings de 128 de dimensiuni dintr-un
-pipeline FaceNet anterior), încărcarea este abandonată, deoarece acei vectori sunt
-incompatibili cu modelul curent.
+\subsubsection{Persistența și reconstrucția indexului}
+Indexul FAISS este o structură de date alocată în memorie, în timp ce baza de date PostgreSQL constituie punctul central de stocare și referință pentru toți vectorii de \emph{embedding}. În tabelul \inlinecode{face\_embeddings}, fiecare \emph{embedding} este salvat în coloana \inlinecode{embedding} de tip \inlinecode{BYTEA}, fiind serializat cu ajutorul bibliotecii \inlinecode{pickle}. La pornirea sistemului, metoda \inlinecode{\_load\_embeddings\_from\_db()} preia toate datele prin \inlinecode{get\_all\_embeddings()} și reconstruiește complet indexul prin apelarea funcției \inlinecode{rebuild\_index()}. Această procedură de reconstrucție este declanșată automat ori de câte ori o persoană este înregistrată, modificată sau ștearsă, garantând astfel consistența strictă între stocarea persistentă și indexul volatil. 
 
-\paragraph{Siguranța accesului concurent.}
+\subsubsection{Siguranța accesului concurent}
 Întrucât firul de recunoaștere facială interoghează indexul în fiecare cadru, în
 timp ce firele care deservesc cererile HTTP îl pot reconstrui (la înregistrarea sau
 ștergerea persoanelor), iar operațiile \inlinecode{add}/\inlinecode{search} ale FAISS
 nu sunt sigure pentru execuția concurentă, toate accesările indexului și ale
 dicționarelor de mapare sunt serializate cu un lock reentrant
 (\inlinecode{threading.RLock}). Caracterul reentrant este necesar deoarece
-\inlinecode{rebuild\_index()} apelează intern \inlinecode{add\_embeddings\_batch()},
-care preia același lock.
+\inlinecode{rebuild\_index()} apelează intern \inlinecode{add\_embeddings} \inlinecode{\_batch()}, care preia același lock.
 
 \subsection{Strategia de matching}
 \label{subsec:matching}
@@ -158,7 +135,7 @@ distanța reală până la cel mai apropiat vector să poată fi înregistrată 
 calibrare (activabilă prin variabila de mediu \inlinecode{FR\_DEBUG}), după care aplică
 manual pragul de decizie configurat.
 
-\paragraph{De la distanța L2 la similaritatea cosinus.}
+\subsubsection{De la distanța L2 la similaritatea cosinus}
 Deoarece embeddings-urile sunt L2-normalizate, între distanța euclidiană la pătrat și
 similaritatea cosinus a doi vectori există relația exactă
 $L2^2 = 2 - 2\cos\theta$, echivalentă cu $\cos\theta = 1 - L2^2/2$. Această echivalență
@@ -181,36 +158,20 @@ convertită în similaritate cosinus, mărginită la intervalul $[0;\ 1]$ și ra
 nivel de încredere; identificatorul persoanei este apoi rezolvat în datele complete
 (nume, ID angajat, departament) prin \inlinecode{get\_person\_by\_id()}. În metoda
 \inlinecode{process\_frame()}, o față este considerată cunoscută doar dacă există o
-potrivire \textit{și} încrederea ei depășește \inlinecode{min\_confidence}; pentru
+potrivire \textit{și} încrederea ei depășește \inlinecode{min\_confidence}. Pentru
 fiecare potrivire validă se înregistrează un eveniment de acces în baza de date prin
 \inlinecode{log\_access()}.
 
 Vizual, fețele cunoscute sunt marcate cu un chenar verde și eticheta
-\inlinecode{nume (încredere)}, iar cele necunoscute cu un chenar portocaliu și eticheta
+\inlinecode{nume} \inlinecode{(încredere)}, iar cele necunoscute cu un chenar portocaliu și eticheta
 \inlinecode{Unknown}, prin metoda \inlinecode{\_draw\_face()}.
 
 \subsection{Optimizarea: omiterea analizei demografice pentru fețele cunoscute}
 \label{subsec:optimizare_demografica}
 
-O optimizare deliberată a pipeline-ului facial constă în condiționarea analizei
-demografice de rezultatul recunoașterii. În \inlinecode{process\_frame()}, atributele
-demografice -- vârsta și genul (produse de capul \inlinecode{genderage} al InsightFace)
-și emoția (produsă de rețeaua Mini-Xception, descrisă în
-secțiunea~\ref{sec:analiza_demografica}) -- sunt calculate \textit{exclusiv pentru
-fețele necunoscute}. Pentru o față recunoscută, câmpurile \inlinecode{age},
-\inlinecode{gender}, \inlinecode{emotion} și \inlinecode{emotion\_confidence} sunt
-setate direct la \inlinecode{None}.
+O optimizare deliberată la nivelul \emph{pipeline}-ului de procesare facială constă în condiționarea analizei demografice de rezultatul etapei de recunoaștere. În cadrul funcției \inlinecode{process\_frame()}, atributele demografice (precum vârsta și genul, generate de modulul \inlinecode{genderage} al arhitecturii InsightFace, alături de emoția prezisă de rețeaua Mini-Xception, detaliată în Secțiunea~\ref{sec:analiza_demografica}) sunt calculate \emph{exclusiv pentru fețele necunoscute}. În cazul unei persoane identificate cu succes, câmpurile \inlinecode{age}, \inlinecode{gender}, \inlinecode{emotion} și \inlinecode{emotion\_confidence} sunt inițializate direct cu valoarea \inlinecode{None}.
 
-Raționamentul are atât o componentă de proiectare, cât și una de performanță. Din
-punct de vedere semantic, pentru o persoană deja identificată informațiile demografice
-sunt redundante: identitatea, vârsta înregistrată și departamentul sunt deja cunoscute
-din baza de date. Din punct de vedere al performanței, omiterea evită o trecere
-suplimentară prin rețeaua de clasificare a emoțiilor pentru fiecare față cunoscută, în
-fiecare cadru -- o economie semnificativă, având în vedere că această inferență rulează
-pe CPU. Astfel, costul analizei demografice este plătit doar atunci când aduce
-informație utilă, adică pentru persoanele care nu pot fi identificate și pentru care
-caracterizarea demografică și emoțională devine relevantă în scenariile de
-supraveghere.
+Raționamentul are atât o componentă de proiectare, cât și una de performanță. Din perspectivă semantică, calcularea informațiilor demografice pentru o persoană deja recunoscută reprezintă o operațiune redundantă, întrucât identitatea, vârsta exactă și departamentul sunt deja disponibile în baza de date. Din punct de vedere al performanței, această decizie elimină necesitatea unei treceri suplimentare (\emph{forward-pass}) prin rețeaua de clasificare a emoțiilor pentru fețele cunoscute, la fiecare cadru. Economia de resurse este considerabilă, în special pentru că inferența rețelei Mini-Xception se execută pe unitatea CPU. Prin urmare, costul computațional aferent analizei demografice este asumat doar atunci când generează informație utilă, adică în cazul persoanelor neidentificate,  pentru care caracterizarea demografică și emoțională devine relevantă în scenariile de supraveghere.
 
 \section{Analiza demografică și emoțională}
 \label{sec:analiza_demografica}
@@ -221,21 +182,14 @@ niciunei intrări din baza de date. Această analiză produce trei atribute pent
 fiecare astfel de față: vârsta estimată, genul și emoția. Implementarea este integrată
 în aceeași clasă \inlinecode{FacialRecognitionSystem} și în aceeași metodă
 \inlinecode{process\_frame()} ca recunoașterea facială, evitând o trecere separată de
-detecție a fețelor. Așa cum s-a arătat în secțiunea~\ref{subsec:optimizare_demografica},
-analiza demografică este aplicată condiționat -- numai pentru fețele necunoscute -- pentru
-că pentru persoanele identificate aceste atribute sunt redundante.
+detecție a fețelor. După cum a fost detaliat în secțiunea~\ref{subsec:optimizare_demografica}, aplicarea analizei demografice este strict condiționată (vizând exclusiv fețele necunoscute), întrucât estimarea acestor atribute devine redundantă în cazul persoanelor deja identificate.
 
-Sursa atributelor este împărțită între două modele: vârsta și genul provin de la capul
-\inlinecode{genderage} al InsightFace, deja inclus în trecerea \inlinecode{buffalo\_s},
-iar emoția este produsă de o rețea convoluțională separată, Mini-Xception, rulată pe
-crop-ul facial. La nivelul interfeței, analiza poate fi activată sau dezactivată global
-de către administrator prin endpoint-ul \inlinecode{/api/demographics/toggle}, care
-comută flag-ul \inlinecode{demographics\_enabled}.
+Extragerea atributelor se bazează pe două modele distincte: vârsta și genul sunt furnizate de modulul \inlinecode{genderage} din cadrul arhitecturii InsightFace (deja evaluat implicit prin execuția pachetului \inlinecode{buffalo\_s}), în timp ce starea emoțională este estimată de o rețea convoluțională independentă, Mini-Xception, aplicată direct pe regiunea facială decupată (\emph{face crop}).
 
 \subsection{Estimarea vârstei și genului}
 \label{subsec:varsta_gen}
 
-Vârsta și genul nu necesită un model dedicat: ambele sunt produse de capul
+Vârsta și genul nu necesită un model dedicat: ambele sunt generate de modulul
 \inlinecode{genderage} al pachetului \inlinecode{buffalo\_s}, în aceeași trecere
 InsightFace care furnizează bounding box-ul, landmark-urile și embedding-ul. Pentru
 fiecare obiect \inlinecode{Face} returnat de detector, atributele sunt extrase astfel:
@@ -250,17 +204,15 @@ fiecare obiect \inlinecode{Face} returnat de detector, atributele sunt extrase a
 \end{itemize}
 
 Această abordare nu adaugă cost de inferență suplimentar: estimările sunt deja calculate
-de InsightFace, fiind doar citite și formatate. Tocmai disponibilitatea capului
-\inlinecode{genderage} a justificat alegerea variantei \inlinecode{buffalo\_s} în locul
-variantei \inlinecode{buffalo\_sc}, care nu îl include
+de InsightFace, fiind doar citite și formatate.
 (secțiunea~\ref{subsec:detectie_extragere}).
 
 \subsection{Recunoașterea emoțiilor cu Mini-Xception}
 \label{subsec:emotii_xception}
 
 Spre deosebire de vârstă și gen, emoția este clasificată de un model separat:
-Mini-Xception, o rețea neuronală convoluțională compactă livrată de pachetul Python
-\inlinecode{fer} prin fișierul de greutăți \inlinecode{emotion\_model.hdf5}. Modelul este
+Mini-Xception, o rețea neuronală convoluțională compactă furnizată de pachetul Python
+\inlinecode{fer} sub forma fișierului de ponderi \inlinecode{emotion\_model.hdf5}. Modelul este
 antrenat pe datasetul FER-2013 și clasifică expresia facială într-una din șapte categorii,
 ordonate conform ieșirilor softmax ale modelului în tuplul \inlinecode{\_EMOTION\_LABELS}:
 \inlinecode{angry}, \inlinecode{disgust}, \inlinecode{fear}, \inlinecode{happy},
@@ -276,11 +228,7 @@ cu crop-ul facial deja delimitat de bounding box-ul InsightFace. Astfel se elimi
 detecție de fețe duplicată și se garantează că emoția este clasificată exact pe regiunea
 identificată de pipeline-ul principal.
 
-Predicția propriu-zisă, implementată în metoda \inlinecode{\_classify\_emotion()}, constă
-într-o trecere înainte prin rețea, urmată de \inlinecode{argmax} peste cele șapte ieșiri
-softmax; rezultatul este perechea (etichetă emoție, scor de încredere). Dimensiunea de
-intrare așteptată de model este citită automat din \inlinecode{input\_shape}, astfel încât
-preprocesarea (descrisă în continuare) se adaptează la geometria modelului.
+Predicția propriu-zisă, implementată în metoda \inlinecode{\_classify\_emotion()}, constă într-o etapă de propagare directă (\emph{forward pass}) prin rețea, urmată de aplicarea operației \inlinecode{argmax} pe cele șapte probabilități furnizate de funcția \emph{softmax}. Rezultatul returnat este un tuplu format din eticheta emoției și scorul de confidență asociat. Dimensiunea de intrare necesară modelului este extrasă automat din proprietatea \inlinecode{input\_shape}, asigurând astfel adaptarea dinamică a etapei de preprocesare (detaliată în continuare) la arhitectura specifică rețelei.
 
 % [DIAGRAMĂ SUGERATĂ] Aici s-ar potrivi o diagramă a fluxului analizei pe o față
 % necunoscută: cadru → InsightFace (bbox + landmarks + embedding + vârstă/gen) →
@@ -291,24 +239,13 @@ preprocesarea (descrisă în continuare) se adaptează la geometria modelului.
 \subsection{Preprocesarea crop-ului facial}
 \label{subsec:preprocesare_crop}
 
-Înainte de a fi trecut prin rețeaua de emoții, crop-ul facial (extras din cadru pe baza
-bounding box-ului InsightFace, în format BGR) parcurge un lanț de preprocesare care
-reproduce fidel pipeline-ul intern al pachetului \inlinecode{fer}, astfel încât greutățile
-antrenate să primească intrări în distribuția pe care o așteaptă. Pașii, implementați în
-\inlinecode{\_classify\_emotion()}, sunt următorii:
+Înainte de a fi evaluat de rețeaua de clasificare a emoțiilor, decupajul facial (extras din imaginea de ansamblu pe baza casetei de încadrare furnizate de InsightFace, în format BGR) parcurge o etapă riguroasă de preprocesare. Acest proces reproduce fidel fluxul intern de prelucrare al pachetului \inlinecode{fer}, garantând astfel faptul că ponderile antrenate ale modelului primesc datele de intrare exact în distribuția statistică necesară. Pașii de transformare, implementați în cadrul metodei \inlinecode{\_classify\_emotion()}, sunt următorii:
 
 \begin{enumerate}
-    \item \textbf{Conversia în tonuri de gri} -- crop-ul BGR este convertit în grayscale
-    cu \inlinecode{cv2.cvtColor}, deoarece modelul Mini-Xception operează pe un singur canal;
-    \item \textbf{Redimensionarea} -- imaginea grayscale este redimensionată la dimensiunea
-    de intrare a modelului (\inlinecode{\_emotion\_target\_size}, dedusă din
-    \inlinecode{input\_shape});
-    \item \textbf{Normalizarea} -- valorile pixelilor sunt scalate din intervalul $[0; 255]$
-    în $[0; 1]$ (împărțire la 255), apoi mapate în intervalul $[-1; 1]$ prin transformarea
-    $(x - 0{,}5) \cdot 2$;
-    \item \textbf{Adăugarea dimensiunilor de tensor} -- matricea este extinsă la forma
-    \inlinecode{(1, H, W, 1)} (dimensiunea de batch și canalul), formatul așteptat de un
-    model Keras.
+	\item \textbf{Conversia în tonuri de gri}: regiunea facială în format BGR este convertită în scară de gri utilizând funcția \inlinecode{cv2.cvtColor}, deoarece modelul Mini-Xception procesează exclusiv imagini cu un singur canal de culoare;
+	\item \textbf{Redimensionarea}: imaginea rezultată este adusă la dimensiunile de intrare impuse de model (la valoarea \inlinecode{\_emotion\_target\_size}, dedusă dinamic din atributul \inlinecode{input\_shape});
+	\item \textbf{Normalizarea}: intensitatea pixelilor este scalată din intervalul $[0, 255]$ în intervalul $[0, 1]$ (prin împărțire la $255$), fiind ulterior mapată în intervalul $[-1, 1]$ aplicând transformarea matematică $(x - 0{,}5) \cdot 2$;
+	\item \textbf{Extinderea dimensionalității tensorului}: matricea bidimensională este remodelată la forma \inlinecode{(1, H, W, 1)} (adăugându-se dimensiunea lotului de prelucrare, \emph{batch size}, și axa canalului), acesta fiind formatul structural așteptat de modelele Keras.
 \end{enumerate}
 
 Întregul lanț este protejat de un bloc \inlinecode{try/except}: dacă, din orice motiv,
@@ -329,10 +266,7 @@ segmentation fault la inițializare; izolarea TensorFlow pe CPU elimină complet
 sursă de instabilitate. În al doilea rând, Mini-Xception este o rețea suficient de mică
 încât latența inferenței pe CPU să fie neglijabilă, iar emoția se calculează doar pentru
 fețele necunoscute (secțiunea~\ref{subsec:optimizare_demografica}); prin urmare, costul pe
-CPU este minor, iar GPU-ul rămâne dedicat integral modelelor grele (InsightFace și cele
-patru detectoare YOLO/SlowFast care rulează concurent). Repartizarea modelelor pe
-dispozitive -- modelele grele pe GPU, clasificatorul ușor de emoții pe CPU -- reflectă astfel
-o decizie explicită de echilibrare a încărcării în arhitectura multi-threaded a aplicației.
+CPU este minor, iar GPU-ul rămâne dedicat integral modelelor grele.
 
 \section{Modulul de recunoaștere a plăcuțelor de înmatriculare}
 \label{sec:modul_placute}
@@ -341,16 +275,10 @@ Modulul de recunoaștere a plăcuțelor de înmatriculare (ANPR -- \textit{Autom
 Plate Recognition}) identifică și citește numerele de înmatriculare ale vehiculelor din
 fluxul video, le validează formatul, le caută în baza de date și decide dacă vehiculul
 este autorizat. Modulul este implementat în clasa \inlinecode{LicensePlateRecognitionSystem}
-din fișierul \inlinecode{license\_plate\_recognition\_system.py} și rulează într-un fir de
+din fișierul \inlinecode{license\_plate\_recognition\_} \linebreak \inlinecode{system.py} și rulează într-un fir de
 execuție dedicat (\textit{Thread~3}).
 
-Pipeline-ul combină un detector de obiecte (YOLOv8) cu un motor de recunoaștere optică a
-caracterelor (EasyOCR), între care se interpun mai mulți pași de preprocesare a imaginii și,
-ulterior, o etapă de stabilizare temporală a rezultatului. O provocare centrală, care a
-modelat întreaga implementare, este faptul că plăcuțele apar în cadru la rezoluții mici
-(tipic 116--151~px lățime), insuficiente pentru un OCR fiabil; din acest motiv pipeline-ul
-include un pas explicit de mărire (up-scaling) și o preprocesare agresivă. Cele opt
-subcapitole care urmează descriu, în ordinea execuției, etapele acestui pipeline.
+\emph{Pipeline}-ul combină un detector de obiecte (YOLOv8) cu un motor de recu-noaștere optică a caracterelor (EasyOCR), între care se interpun mai mulți pași de preprocesare a imaginii și, ulterior, o etapă de stabilizare temporală a rezultatului. O provocare majoră, care a influențat semnificativ implementarea, este faptul că plăcuțele apar în cadru la rezoluții reduse (tipic 116--151~px lățime), insuficiente pentru o recunoaștere OCR fiabilă. Din acest motiv, \emph{pipeline}-ul include un pas explicit de mărire a imaginii (\emph{up-scaling}) și o etapă avansată de filtrare și accentuare a detaliilor. Cele opt subcapitole care urmează descriu, în ordinea execuției, etapele acestui flux de prelucrare.
 
 % [DIAGRAMĂ SUGERATĂ] O diagramă de tip pipeline ar ilustra bine întregul flux:
 % cadru → YOLOv8 (detecție + bbox) → expandare bbox (padding 0.20) → up-scaling
@@ -361,41 +289,19 @@ subcapitole care urmează descriu, în ordinea execuției, etapele acestui pipel
 \subsection{Detecția plăcuțelor cu YOLOv8}
 \label{subsec:detectie_placute}
 
-Localizarea plăcuțelor în cadru este realizată de un model YOLOv8 încărcat prin clasa
-\inlinecode{YOLO} din pachetul \inlinecode{ultralytics}, din fișierul de greutăți
-\inlinecode{models/license\_plate/best.pt}. Modelul este o variantă YOLOv8 pre-antrenată
-specific pentru detecția plăcuțelor de înmatriculare (o singură clasă,
-\inlinecode{license\_plate}), preluată ca atare; nu a necesitat antrenare suplimentară în
-cadrul proiectului. La inițializare, dacă există suport CUDA, modelul este mutat pe GPU.
+Localizarea plăcuțelor în cadru este realizată cu ajutorul unui model YOLOv8, instanțiat prin intermediul clasei \inlinecode{YOLO} din pachetul \inlinecode{ultralytics}, pe baza fișierului de ponderi \inlinecode{models/license\_plate/best.pt}. Acesta reprezintă o variantă pre-antrenată, dedicată exclusiv detecției plăcuțelor de înmatriculare (având definită o singură clasă, \inlinecode{license\_plate}). Modelul a fost integrat în sistem în forma sa originală, fără a necesita o etapă suplimentară de antrenare (\emph{fine-tuning}) în cadrul acestui proiect. La momentul inițializării, pentru a optimiza viteza de inferență, sistemul verifică disponibilitatea mediului CUDA și, în caz afirmativ, transferă execuția modelului pe unitatea GPU.
 
-Pentru fiecare cadru, metoda \inlinecode{process\_frame()} apelează
-\inlinecode{predict()} cu \inlinecode{imgsz=640} și un prag de încredere
-\inlinecode{conf=0.25}, obținând bounding box-urile candidate. Fiecare cutie
-\inlinecode{[x1, y1, x2, y2]} este apoi \textit{expandată} cu 20\% în fiecare direcție prin
-funcția \inlinecode{expand\_bbox()} (un \inlinecode{pad\_ratio} de \inlinecode{0.20},
-mărit față de valoarea inițială de \inlinecode{0.05}). Acest padding mai generos asigură
-că marginile plăcuței și o mică margine de context sunt incluse în decupaj, evitând tăierea
-caracterelor de la extremități înainte de OCR. Decupajul rezultat este transmis pașilor
-următori.
+Pentru fiecare cadru procesat, metoda \inlinecode{process\_frame()} apelează funcția \inlinecode{predict()} utilizând parametrul \inlinecode{imgsz=640} și un prag de confidență \inlinecode{conf=0.25}, extrăgând astfel casetele de încadrare candidate (\emph{bounding boxes}). Fiecare casetă, definită prin coordonatele \inlinecode{[x1, y1, x2, y2]}, este ulterior \textit{extinsă} cu 20\% în toate direcțiile prin intermediul funcției \inlinecode{expand\_bbox()} (utilizând un coeficient \inlinecode{pad\_ratio} de \inlinecode{0.20}). Această margine de siguranță mai generoasă garantează includerea limitelor fizice ale plăcuței alături de un context vizual minim, prevenind astfel decuparea accidentală a caracterelor aflate la extremități înaintea evaluării OCR. Regiunea decupată rezultată este transmisă etapelor ulterioare de prelucrare.
 
 \subsection{Up-scaling-ul plăcuțelor mici}
 \label{subsec:upscaling}
 
-Întrucât plăcuțele detectate sunt frecvent prea mici pentru ca OCR-ul să le citească corect,
-decupajul trece prin funcția \inlinecode{upscale\_if\_small()}, care îl mărește la o lățime
-țintă de \inlinecode{250}~px. Logica este următoarea: dacă lățimea curentă este sub prag, se
-calculează un factor de scalare $\mathit{scale} = 250 / w$, plafonat la un maxim de
-\inlinecode{3.0} (pentru a nu amplifica excesiv zgomotul), iar imaginea este redimensionată
-cu interpolare bicubică (\inlinecode{cv2.INTER\_CUBIC}), aleasă pentru calitatea
-reconstrucției la mărire. Plăcuțele care depășesc deja lățimea țintă sunt lăsate neschimbate.
-Acest pas transformă, de exemplu, un decupaj de $116 \times 33$~px într-unul de cca.
-$250 \times 70$~px, dimensiune la care OCR-ul devine fiabil.
+Deoarece plăcuțele detectate prezintă frecvent dimensiuni insuficiente pentru o recunoaștere OCR precisă, regiunea decupată este procesată de funcția \linebreak \inlinecode{upscale\_if\_small()}, având ca scop redimensionarea la o lățime țintă de \inlinecode{250}~px. Algoritmul aplică următoarea regulă: dacă lățimea curentă se situează sub acest prag, se calculează un factor de scalare $\mathit{scale} = 250 / w$. Acesta este limitat superior la valoarea \inlinecode{3.0} pentru a preveni amplificarea excesivă a zgomotului de imagine. Redimensionarea propriu-zisă utilizează interpolarea bicubică (\inlinecode{cv2.INTER\_CUBIC}), selectată datorită calității superioare a reconstrucției detaliilor în procesul de suprascalare. Casetele care îndeplinesc deja criteriul de lățime minimă rămân nemodificate. Printr-o astfel de operațiune, o regiune inițială de $116 \times 33$~px este transformată într-o imagine de aproximativ $250 \times 70$~px, rezoluție la care performanța algoritmului OCR atinge un nivel optim de fiabilitate.
 
 \subsection{Pipeline-ul de preprocesare pentru OCR}
 \label{subsec:preprocesare_ocr}
 
-Decupajul mărit este apoi pregătit pentru OCR de funcția \inlinecode{preprocess\_plate()},
-care aplică un lanț de patru operații tunat pentru EasyOCR pe plăcuțe:
+Imaginea mărită este ulterior pregătită pentru etapa de recunoaștere optică a textului (OCR) prin intermediul funcției \inlinecode{preprocess\_plate()}. Aceasta aplică o secvență de patru operații, optimizată special pentru a maximiza performanța algoritmului EasyOCR în identificarea plăcuțelor de înmatriculare:
 
 \begin{enumerate}
     \item \textbf{Conversie în tonuri de gri} -- imaginea color este transformată în
@@ -404,7 +310,7 @@ care aplică un lanț de patru operații tunat pentru EasyOCR pe plăcuțe:
     culoare și de spațiu de $17$) -- reduce zgomotul, păstrând în același timp muchiile
     caracterelor;
     \item \textbf{Egalizare locală de histogramă CLAHE} (\inlinecode{clipLimit=2.0},
-    \inlinecode{tileGridSize=(8, 8)}) -- compensează umbrele și iluminarea neuniformă;
+    \inlinecode{tileGrid} \inlinecode{Size=(8, 8)}) -- compensează umbrele și iluminarea neuniformă;
     \item \textbf{Unsharp mask} -- accentuează muchiile caracterelor după mărire, construit
     ca diferență ponderată între imaginea originală (coeficient $1{,}5$) și o versiune blurată
     Gaussian cu $\sigma = 1{,}0$ (coeficient $-0{,}5$).
@@ -453,72 +359,27 @@ ocazional, dăunează în loc să ajute.
 \subsection{Tracking-ul plăcuțelor între cadre}
 \label{subsec:tracking_placute}
 
-O citire dintr-un singur cadru este nesigură: OCR-ul poate confunda caractere similare
-(\inlinecode{O}/\inlinecode{0}, \inlinecode{B}/\inlinecode{8}) de la un cadru la altul. Pentru
-a obține un rezultat stabil, fiecare detecție este urmărită între cadre de clasa
-\inlinecode{PlateTracker}. Asocierea unei detecții cu un traseu existent (\textit{track}) se
-face pe baza suprapunerii spațiale: se calculează \textit{IoU} (\textit{Intersection over
-Union}, prin funcția \inlinecode{\_iou()}) între bounding box-ul curent și cele ale traseelor
-active, iar detecția este atribuită traseului cu IoU maxim, dacă acesta depășește pragul
-\inlinecode{iou\_threshold=0.3}. Dacă niciun traseu nu se potrivește, se creează unul nou, cu
-un identificator unic.
+Extragerea textului dintr-un singur cadru este o abordare predispusă la erori, deoarece algoritmul OCR poate confunda cu ușurință caractere similare din punct de vedere vizual (precum \inlinecode{O} și \inlinecode{0}, sau \inlinecode{B} și \inlinecode{8}) de-a lungul cadrelor succesive. Pentru a garanta stabilitatea rezultatului, fiecare detecție este monitorizată temporal prin intermediul clasei \inlinecode{PlateTracker}. Asocierea unei noi detecții cu o traiectorie existentă (\emph{track}) se realizează evaluând suprapunerea spațială: se calculează metrica \emph{IoU} (\emph{Intersection over Union}, prin apelul funcției \inlinecode{\_iou()}) între caseta de încadrare curentă și casetele traiectoriilor active. Detecția este atribuită traiectoriei care prezintă valoarea maximă a metricei IoU, cu condiția ca aceasta să depășească pragul minim definit de \inlinecode{iou\_threshold=0.3}. În situația în care nu se identifică nicio corespondență validă, sistemul inițializează o nouă traiectorie, alocându-i un identificator unic.
 
-Fiecare traseu păstrează un istoric de citiri recente într-o coadă mărginită
-(\inlinecode{deque} cu lungimea \inlinecode{history=10}) și un câmp \inlinecode{age} care
-numără de câte cadre nu a mai fost actualizat. La fiecare cadru, metoda
-\inlinecode{age\_tracks()} incrementează vârsta tuturor traseelor și le elimină pe cele care
-depășesc \inlinecode{max\_age=15} cadre, astfel încât vehiculele care au părăsit scena să nu
-mai fie urmărite.
+Fiecare traiectorie menține un istoric al citirilor recente, stocat într-o structură de date liniară cu capacitate limitată (un obiect \inlinecode{deque} configurat cu parametrul \inlinecode{history=10}). Suplimentar, entitatea folosește parametrul de stare \inlinecode{age}, care contorizează numărul de cadre consecutive în care respectiva traiectorie nu a primit actualizări. La procesarea fiecărui cadru, metoda \inlinecode{age\_tracks()} incrementează acest contor de inactivitate pentru toate traiectoriile monitorizate, eliminându-le automat pe cele care depășesc pragul \inlinecode{max\_age=15} cadre. Acest mecanism asigură oprirea urmăririi pentru vehiculele care au părăsit câmpul vizual al camerei.
 
 \subsection{Validarea formatului}
 \label{subsec:validare_format}
 
-Înainte ca o citire să fie luată în considerare pentru votare, ea este validată față de
-formatul plăcuțelor românești printr-o expresie regulată,
-\inlinecode{ROMANIAN\_PLATE\_RE}. Aceasta acceptă 1--2 litere de județ, urmate de 2--3 cifre
-și 3 litere (de exemplu, \inlinecode{CJ12ABC} sau, în cazul Bucureștiului,
-\inlinecode{B123ABC}). În metoda \inlinecode{PlateTracker.update()}, o citire este adăugată
-în istoricul de voturi al traseului numai dacă este nevidă, are încrederea cel puțin
-\inlinecode{0.4} \textit{și} respectă acest format. Citirile malformate (rezultate, de
-regulă, din erori de OCR) sunt astfel filtrate înainte de a ajunge în vot, ceea ce crește
-robustețea rezultatului final.
+Înainte de a fi inclusă în procesul decizional de agregare, fiecare citire este validată în raport cu formatul standard al plăcuțelor de înmatriculare din România, prin intermediul expresiei regulate \inlinecode{ROMANIAN\_PLATE\_RE}. Această regulă acceptă configurații formate din una sau două litere pentru indicativul județului, urmate de două sau trei cifre și un grup final de trei litere (de exemplu, \inlinecode{CJ12ABC} sau, specific pentru București, \inlinecode{B123ABC}). În cadrul metodei \inlinecode{PlateTracker.update()}, un rezultat OCR este adăugat în istoricul instanței de urmărire exclusiv dacă îndeplinește cumulativ trei condiții: este un șir nevid, prezintă un scor de confidență de minimum \inlinecode{0.4} \textit{și} respectă strict formatul impus. Rezultatele incorect formatate (provenite, în general, din erori ale modulului OCR) sunt astfel filtrate anterior etapei de evaluare, contribuind la o creștere semnificativă a robusteței rezultatului final.
 
 \subsection{Votarea temporală}
 \label{subsec:votare_temporala}
 
-Rezultatul stabil al unui traseu este decis printr-un \textit{vot majoritar} pe istoricul de
-citiri valide. Logica, implementată tot în \inlinecode{PlateTracker.update()}, se activează
-numai după ce traseul a acumulat cel puțin \inlinecode{min\_votes=3} citiri. Voturile sunt
-agregate într-un \inlinecode{Counter} în care fiecare text candidat acumulează suma
-încrederilor citirilor sale; textul cu scorul total maxim este selectat, iar dacă numărul de
-citiri care îl susțin atinge pragul \inlinecode{min\_votes}, el devine rezultatul ``emis'' al
-traseului (\inlinecode{emitted}), cu o încredere egală cu media încrederilor voturilor sale.
+Determinarea rezultatului final pentru o traiectorie se realizează printr-un proces de \textit{selecție majoritară} aplicat pe istoricul citirilor valide. Această logică de agregare, integrată în metoda \inlinecode{PlateTracker.update()}, se declanșează exclusiv după ce instanța de urmărire a înregistrat un minim de \inlinecode{min\_votes=3} citiri. Datele candidate sunt centralizate utilizând o structură de tip \inlinecode{Counter}, în cadrul căreia fiecare text cumulează suma scorurilor de confidență aferente. Șirul de caractere cu scorul total maxim este desemnat câștigător; dacă numărul recunoașterilor individuale care îl susțin atinge pragul \inlinecode{min\_votes}, acesta devine rezultatul consolidat (starea \inlinecode{emitted}) al traiectoriei, având un scor de confidență final calculat ca media aritmetică a scorurilor individuale.
 
-Doar după ce un traseu produce o citire stabilizată sistemul efectuează căutarea în baza de
-date: \inlinecode{lookup\_owner\_by\_plate()} caută proprietarul, iar prezența unei intrări
-marchează vehiculul ca autorizat. Plăcuțele nestabilizate sau necunoscute sunt raportate ca
-\inlinecode{UNKNOWN} / \inlinecode{"Unknown car"}, iar vizual vehiculele autorizate sunt
-încadrate cu verde, cele neautorizate cu roșu. Acest mecanism de votare temporală asigură că o
-plăcuță este declarată și verificată doar atunci când mai multe cadre consecutive sunt de
-acord asupra aceluiași text valid, eliminând citirile tranzitorii eronate.
-
+Interogarea bazei de date este inițiată strict după ce o traiectorie generează o citire stabilizată: funcția \inlinecode{lookup\_owner\_by\_plate()} verifică existența unui proprietar, iar validarea unei înregistrări atestă statutul de vehicul autorizat. Plăcuțele aflate în stadiu de evaluare sau care nu figurează în sistem sunt etichetate drept \inlinecode{UNKNOWN} (sau \inlinecode{"Unknown car"}). La nivelul interfeței vizuale, vehiculele autorizate sunt delimitate printr-o casetă verde, în timp ce vehiculele neautorizate sau necunoscute sunt marcate cu roșu. Acest mecanism de agregare temporală garantează că o plăcuță este validată și supusă verificării doar atunci când există un consens pe mai multe cadre consecutive asupra aceluiași text, eliminând astfel cu succes erorile de citire tranzitorii.
 \section{Modulul de detecție foc și fum}
 \label{sec:modul_foc_fum}
 
-Modulul de detecție a focului și a fumului identifică în fluxul video apariția flăcărilor și
-a fumului, declanșând alerte timpurii în scenariile de incendiu. Este implementat în clasa
-\inlinecode{FireDetectionSystem} din fișierul \inlinecode{fire\_detection\_system.py} și
-rulează într-un fir de execuție dedicat (\textit{Thread~4}).
+Modulul de detecție a focului și a fumului identifică în fluxul video apariția flăcărilor și a emisiilor de fum, facilitând declanșarea unor alerte timpurii în scenariile de incendiu. Acesta este implementat în clasa \inlinecode{FireDetectionSystem} din fișierul \inlinecode{fire\_detection\_system.py} și operează într-un fir de execuție dedicat (\textit{Thread~4}).
 
-Provocarea principală a acestui modul nu este detecția în sine, ci controlul falselor
-pozitive: focul și mai ales fumul sunt clase notoriu de predispuse la confuzii (pereți gri,
-nori, abur, reflexii calde, apusuri de soare). O detecție brută a unui model YOLO, folosită
-direct ca alarmă, ar genera un volum inacceptabil de alarme false. Din acest motiv,
-implementarea adaugă peste model un \textit{pipeline de filtrare în cinci niveluri}, care
-transformă detecțiile candidate în alerte numai după ce trec, în ordine, prin toate filtrele.
-Subcapitolele care urmează descriu modelul de bază, cele cinci niveluri de filtrare și, în
-final, semnificația flag-urilor \inlinecode{confirmed} și \inlinecode{alert} atașate fiecărei
-detecții.
+Provocarea principală a acestui modul nu constă în detecția propriu-zisă, ci în controlul strict al rezultatelor fals pozitive: focul și, în special, fumul, reprezintă categorii vizuale cu un grad ridicat de ambiguitate (fiind predispuse la confuzii cu pereți gri, formațiuni noroase, abur, reflexii calde sau lumina apusului). O detecție primară obținută de la un model YOLO, dacă ar fi utilizată direct pentru declanșarea unei alarme, ar genera un volum inacceptabil de avertizări false. Din acest motiv, implementarea suprapune peste modelul de bază un \textit{mecanism de filtrare structurat pe cinci niveluri}, care transformă detecțiile candidate în alerte finale exclusiv după ce acestea îndeplinesc, în ordine succesivă, condițiile tuturor filtrelor. Subcapitolele următoare descriu modelul de bază, cele cinci etape de filtrare și, în final, semnificația indicatorilor de stare \inlinecode{confirmed} și \inlinecode{alert} asociați fiecărei detecții.
 
 % [DIAGRAMĂ SUGERATĂ] O diagramă în „cascadă'' (funnel) ar ilustra clar pipeline-ul:
 % detecții brute YOLOv10 → [N1] prag de încredere per clasă → [N2] filtru de
@@ -529,19 +390,9 @@ detecții.
 \subsection{Modelul YOLOv10 pre-antrenat}
 \label{subsec:yolov10_preantrenat}
 
-Modelul de bază este \inlinecode{TommyNgx/YOLOv10-Fire-and-Smoke-Detection}, o variantă
-YOLOv10 publicată pe HuggingFace și antrenată specific pentru cele două clase de interes:
-\inlinecode{Fire} și \inlinecode{Smoke}. Modelul este folosit ca atare, fără antrenare
-suplimentară, fiind încărcat prin clasa \inlinecode{YOLO} din pachetul \inlinecode{ultralytics}
-din fișierul de greutăți \inlinecode{models/fire\_and\_smoke/best.pt}. Numele claselor sunt
-normalizate la litere mici (\inlinecode{fire}, \inlinecode{smoke}) imediat după încărcare,
-pentru a fi folosite consistent în restul pipeline-ului.
+Modelul de bază utilizat este \inlinecode{TommyNgx/YOLOv10-Fire-and-Smoke-Detection}, o variantă a arhitecturii YOLOv10 publicată pe platforma HuggingFace și antrenată specific pentru cele două clase de interes: \inlinecode{Fire} și \inlinecode{Smoke}. Modelul este integrat în sistem în forma sa originală, nefiind necesară o etapă suplimentară de reantrenare (\emph{fine-tuning}), și este instanțiat prin intermediul clasei \inlinecode{YOLO} (din pachetul \inlinecode{ultralytics}) pe baza fișierului de ponderi \inlinecode{models/fire\_and\_smoke/best.pt}. Imediat după încărcare, denumirile claselor sunt normalizate prin convertirea literelor în minuscule (\inlinecode{fire}, \inlinecode{smoke}), asigurând astfel o utilizare consecventă în restul fluxului de prelucrare.
 
-La fiecare cadru, metoda \inlinecode{process\_frame()} rulează \inlinecode{model.predict()} cu
-un prag de încredere egal cu \textit{cel mai mic} dintre pragurile per clasă (și un IoU de NMS
-de \inlinecode{0.45}). Această alegere este deliberată: modelul este lăsat să returneze toți
-candidații peste pragul minim, iar filtrarea fină per clasă este aplicată ulterior, explicit,
-de pipeline -- ceea ce dă control complet asupra deciziei de alertă.
+La nivelul fiecărui cadru, metoda \inlinecode{process\_frame()} execută funcția \linebreak \inlinecode{model.predict()} utilizând un prag de confidență egal cu \textit{cea mai mică} valoare dintre pragurile definite per clasă, alături de un prag IoU de \inlinecode{0.45} pentru algoritmul de suprimare a non-maximelor (NMS). Această abordare a fost aleasă în mod deliberat: modelului i se permite să returneze toate detecțiile candidate care depășesc pragul minim de confidență, urmând ca filtrarea riguroasă la nivel de clasă să fie aplicată ulterior, în mod explicit, de către mecanismul de procesare. Această arhitectură oferă un control deplin asupra procesului decizional de declanșare a alertelor.
 
 \subsection{Pipeline-ul de filtrare în cinci niveluri}
 \label{subsec:pipeline_filtrare}
@@ -941,7 +792,7 @@ Kinetics -- este înlocuit cu un cap nou, adaptat problemei: o secvență
 înlocuire este realizată în \inlinecode{build\_slowfast\_model()} din
 \inlinecode{models/slowfast\_model.py}.
 
-\paragraph{Formatul intrării (contractul SlowFast).}
+\subsubsection{Formatul intrării (contractul SlowFast)}
 Fiecare videoclip este transformat într-o pereche de tensori, câte unul pentru fiecare cale:
 calea Slow primește \inlinecode{8} cadre, iar calea Fast \inlinecode{32} de cadre, ambele decupate
 spațial la $224 \times 224$ pixeli. Cadrele sunt eșantionate uniform dintr-un clip
@@ -1046,7 +897,7 @@ ridicate (F1 de $0{,}933$, respectiv $0{,}939$), confuziile reziduale fiind, în
 preponderent între ele -- ambele provin din același dataset RWF-2000 și pot conține secvențe
 ambigue la granița dintre activitate agitată și altercație.
 
-\paragraph{Integrarea în aplicație.}
+\subsubsection{Integrarea în aplicație}
 La rulare, modelul antrenat este folosit de \inlinecode{HumanActionRecognitionSystem}, care nu
 poate clasifica un singur cadru, ci are nevoie de o secvență. De aceea, sistemul acumulează
 cadrele primite într-un \textit{ring buffer} (\inlinecode{deque}) și rulează inferența doar o dată
