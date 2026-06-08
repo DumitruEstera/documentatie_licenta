@@ -476,8 +476,10 @@ Deoarece niciun set de date public nu oferea, în mod individual, o acoperire su
     \item \textbf{SOHAS Weapon Detection} (Roboflow) -- 5.858 de imagini, cu șase clase
     originale: \inlinecode{pistol}, \inlinecode{knife}, \inlinecode{smartphone},
     \inlinecode{billete} (bancnote), \inlinecode{monedero} (portofel) și \inlinecode{tarjeta}
-    (card). Ultimele patru clase sunt obiecte non-armă care pot fi ușor confundate cu arme și
-    ajută modelul să învețe să le diferențieze.
+    (card). Ultimele patru clase sunt obiecte non-armă care pot fi ușor confundate cu arme;
+    ele nu sunt păstrate ca o clasă distinctă, ci sunt eliminate din etichete la preprocesare,
+    iar imaginile respective sunt reutilizate ca exemple negative (vezi
+    Secțiunea~\ref{subsec:preprocesare_unificare}).
 \end{itemize}
 
 După combinare, datasetul final conține 14.336 de imagini și 12.592 de bounding box-uri,
@@ -499,12 +501,29 @@ etapă de preprocesare pentru unificarea lor într-o structură YOLO coerentă, 
     din etichete;
     \item \textbf{Merge} -- cele două dataseturi sunt unite într-o singură structură YOLO cu trei
     partiții (\inlinecode{train}, \inlinecode{valid}, \inlinecode{test}); partiția \inlinecode{val}
-    a sursei Zenodo este redenumită \inlinecode{valid} pentru consistență;
-    \item \textbf{Negative samples} -- imaginile fără adnotări (în care nu apare nicio armă) sunt
-    păstrate ca exemple negative. Ele învață modelul ce \textit{nu} este o armă și reduc rata de
-    false pozitive la inferență, mai ales pentru obiectele care seamănă cu armele (cazul
-    imaginilor cu telefoane sau portofele din Roboflow, ale căror etichete au fost golite).
+    a sursei Zenodo este redenumită \inlinecode{valid} pentru consistență. Important de subliniat:
+    împărțirea în antrenare/validare/testare nu este efectuată în cadrul acestui proiect, ci este
+    \textit{moștenită ca atare} din cele două seturi sursă, ambele livrate deja pre-partiționate
+    (Zenodo cu \inlinecode{train/val/test}, iar exportul YOLOv8 al SOHAS cu \inlinecode{train/valid/test}).
+    Scriptul nu aplică nicio re-partiționare aleatorie -- fiecare imagine rămâne în partiția pe care
+    o avea în datasetul de origine, iar partițiile omonime din cele două surse sunt concatenate;
+    \item \textbf{Negative samples} -- exemplele negative nu necesită niciun tratament special
+    în scriptul de antrenare. O imagine este copiată în datasetul final chiar dacă fișierul ei de
+    etichetă rămâne gol, fie pentru că nu conținea nicio adnotare, fie pentru că singurele adnotări
+    (telefon, portofel, bancnotă, card) au fost eliminate la pasul de \textit{relabel} de mai sus.
+    YOLOv8 interpretează automat orice imagine cu fișier de etichetă gol drept fundal
+    (\textit{background}): la antrenare aceasta nu contribuie cu nicio țintă pozitivă, iar orice
+    detecție de armă pe ea este penalizată ca fals pozitiv. Astfel, aceste imagini învață modelul
+    ce \textit{nu} este o armă și reduc rata de false pozitive la inferență, mai ales pentru
+    obiectele care seamănă cu armele (cazul imaginilor cu telefoane sau portofele din Roboflow,
+    ale căror etichete au fost golite).
 \end{itemize}
+
+Întrucât partițiile sunt preluate din sursele originale, proporțiile finale rezultă din modul în
+care erau deja împărțite acestea, nu dintr-un raport impus de proiect. Pe cele 14.336 de imagini
+ale datasetului combinat, distribuția este de aproximativ \textbf{70\,\% antrenare} (10.041 imagini),
+\textbf{15\,\% validare} (2.104 imagini) și \textbf{15\,\% testare} (2.191 imagini), adică un raport
+de aproximativ 70/15/15.
 
 La final, scriptul generează automat un fișier \inlinecode{data.yaml} cu structura standard YOLO,
 declarând o singură clasă (\inlinecode{nc: 1}, \inlinecode{names: \{0: weapon\}}).
@@ -563,55 +582,41 @@ aplicate multiple transformări de augmentare a datelor:
 \subsection{Rezultatele antrenării}
 \label{subsec:rezultate_arme}
 
-Antrenarea a parcurs toate cele 100 de epoci (early stopping nu s-a declanșat). Metricile pe
-partiția de validare la finalul antrenării sunt sintetizate în tabelul~\ref{tab:rezultate_arme}.
+Antrenarea a parcurs toate cele 100 de epoci (early stopping nu s-a declanșat). Modelul a fost
+evaluat în două regimuri: pe partiția de \textit{validare} (monitorizată la fiecare epocă în timpul
+antrenării) și, separat, pe partiția de \textit{test} -- date pe care modelul nu le-a întâlnit
+niciodată, nici la antrenare, nici la selecția epocii optime. Ambele seturi de metrici sunt
+sintetizate comparativ în tabelul~\ref{tab:rezultate_arme}.
 
 \begin{table}[h]
     \centering
-    \caption{Metricile finale de validare ale modelului de detecție a armelor.}
+    \caption{Metricile modelului de detecție a armelor, pe partițiile de validare și de test.}
     \label{tab:rezultate_arme}
-    \begin{tabular}{l c}
+    \begin{tabular}{l c c}
         \hline
-        \textbf{Metrică} & \textbf{Valoare} \\
+        \textbf{Metrică} & \textbf{Validare} & \textbf{Test} \\
         \hline
-        Precizie (\textit{precision}) & $0{,}937$ \\
-        Sensibilitate (\textit{recall}) & $0{,}894$ \\
-        mAP@$0{,}5$ & $0{,}947$ \\
-        mAP@$0{,}5{:}0{,}95$ & $0{,}700$ \\
+        Precizie (\textit{precision}) & $0{,}937$ & $0{,}943$ \\
+        Sensibilitate (\textit{recall}) & $0{,}894$ & $0{,}902$ \\
+        mAP@$0{,}5$ & $0{,}947$ & $0{,}943$ \\
+        mAP@$0{,}5{:}0{,}95$ & $0{,}700$ & $0{,}696$ \\
         \hline
     \end{tabular}
 \end{table}
 
-Modelul atinge o precizie de $93{,}7\%$ și o sensibilitate de $89{,}4\%$, cu un mAP@$0{,}5$ de
-$0{,}947$. Valoarea mAP@$0{,}5{:}0{,}95$ (media mAP peste praguri IoU de la $0{,}5$ la $0{,}95$)
-este de $0{,}700$, indicând o localizare bună, deși mai puțin precisă la pragurile IoU foarte
-stricte -- comportament tipic pentru detecția unor obiecte cu forme și orientări foarte variate,
-cum sunt armele.
+Pe setul de testare (2.191 de imagini nevăzute, dintre care 444 imagini de fundal fără nicio armă), modelul atinge o precizie de $94{,}3\%$ și o sensibilitate de $90{,}2\%$, cu un mAP@$0{,}5$ de $0{,}943$. Valoarea mAP@$0{,}5{:}0{,}95$ (media mAP peste pragurile IoU cuprinse între $0{,}5$ și $0{,}95$) este de $0{,}696$. Acest rezultat indică o localizare spațială bună, deși mai puțin exactă la pragurile IoU foarte stricte (un comportament tipic pentru detecția obiectelor cu forme și orientări foarte variate, cum sunt armele). În esență, metricile pe test sunt practic identice cu cele de validare (diferențe sub un punct procentual, în ambele sensuri). Aceasta confirmă o bună capacitate de generalizare a modelului și absența fenomenului de supraînvățare (\textit{overfitting}): performanța raportată nu este doar o consecință a adaptării la setul de validare folosit pentru monitorizarea antrenamentului.
 
 \subsection{Discuție asupra rezultatelor}
 \label{subsec:discutie_arme}
 
-Valorile obținute sunt solide pentru o sarcină dificilă: detecția unei clase vizual eterogene
-(o armă de foc, un cuțit și o bâtă de baseball au foarte puține trăsături comune), pe un dataset
-combinat din surse cu stiluri de adnotare diferite. Diferența dintre precizie ($93{,}7\%$) și
-sensibilitate ($89{,}4\%$) arată că modelul este ușor mai conservator: ratează unele arme, dar
-generează relativ puține detecții false -- un compromis dezirabil pentru a evita alarmele false
-într-un sistem de securitate.
+Valorile obținute sunt solide pentru o sarcină dificilă: detecția unei clase vizual eterogene (o armă de foc, un cuțit și o bâtă de baseball au foarte puține trăsături comune), pe un set de date combinat din surse cu stiluri de adnotare diferite. Diferența dintre precizie ($94{,}3\%$) și sensibilitate ($90{,}2\%$) arată că modelul este ușor mai conservator: ratează unele arme, dar generează relativ puține detecții false. Acesta este un compromis dorit pentru a evita alarmele false într-un sistem de securitate.
 
-Acest comportament este întărit la inferență de o decizie de proiectare la nivelul modulului de
-rulare (\inlinecode{WeaponDetectionSystem}): deși modelul produce candidați peste un prag de
-încredere permisiv ($0{,}3$), o detecție este reținută doar dacă depășește un post-filtru strict
-de încredere ($0{,}7$), iar alerta este confirmată temporal pe mai multe cadre consecutive
-(mecanism analog celui de la detecția de foc, secțiunea~\ref{subsec:confirmare_temporala}).
-Astfel, sensibilitatea brută a modelului este deliberat schimbată pe o precizie operațională mai
-mare, prioritizând reducerea falselor alarme. Aportul exemplelor negative (telefoane, portofele,
-carduri din SOHAS, cu etichete golite) se reflectă tocmai în această precizie ridicată, modelul
-fiind expus explicit la obiecte care pot fi confundate cu arme.
+Acest comportament este susținut la inferență de o decizie de proiectare la nivelul modulului de rulare (\inlinecode{WeaponDetectionSystem}). Deși modelul produce candidați peste un prag de confidență permisiv ($0{,}3$), o detecție este reținută doar dacă trece de un filtru ulterior mai strict de confidență ($0{,}7$), iar alerta finală necesită confirmare temporală pe mai multe cadre consecutive (mecanism analog celui de la detecția de foc, detaliat în Secțiunea~\ref{subsubsec:confirmare_temporala}). Astfel, sensibilitatea brută a modelului este sacrificată intenționat în favoarea unei precizii operaționale mai mari, prioritară fiind reducerea falselor alarme. Aportul exemplelor negative (telefoane, portofele, carduri din datasetul SOHAS, lăsate intenționat fără adnotări) se reflectă tocmai în această precizie ridicată, modelul fiind forțat să ignore obiectele uzuale care pot fi confundate cu arme.
 
 \section{Modulul de recunoaștere a acțiunilor umane (fine-tuning SlowFast)}
 \label{sec:modul_actiuni}
 
-Cel mai complex modul de inteligență artificială al sistemului este cel de recunoaștere a
+Cel mai complex modul de inteligență artificială al sistemului este cel de recu-noaștere a
 acțiunilor umane (HAR -- \textit{Human Action Recognition}), care clasifică \textit{secvențe
 video} (nu cadre izolate) în trei categorii comportamentale: \inlinecode{normal} (activitate
 obișnuită), \inlinecode{fight} (lupte, altercații fizice) și \inlinecode{vandalism} (acte de
@@ -714,6 +719,17 @@ de vandalism, acoperind o gamă largă de acțiuni: graffiti / street art, sparg
 vitrine, distrugere de autoturisme (zgâriere, lovire), intrare prin efracție, distrugere de
 mobilier urban, aruncare cu obiecte și alte forme de distrugere intenționată a proprietății.
 
+\subsection{Împărțirea în seturile de antrenare și validare}
+\label{subsec:split_train_val}
+
+Un aspect esențial pentru validitatea rezultatelor raportate este modul în care datele au fost partiționate între antrenare și validare. Orice suprapunere între aceste două mulțimi ar conduce la o supraestimare a performanțelor (\textit{data leakage}). Modul de organizare a datelor, vizibil în fișierul \inlinecode{data/dataset.py}, garantează imposibilitatea unei astfel de scurgeri de informații din două motive complementare.
+
+Unitatea de antrenare este videoclipul integral, nu un fragment al acestuia. Fiecare exemplu din setul de date corespunde unui singur fișier video complet. Clasa \inlinecode{ActionVideoDataset} parcurge directoarele și construiește o listă de perechi \inlinecode{(cale\_video, etichetă)}, generând câte o intrare pentru fiecare fișier. La încărcare, întregul videoclip este decodat o singură dată, iar din durata sa totală sunt eșantionate \textit{uniform} cadrele necesare pentru a construi perechea de intrări (\textit{slow/fast}). Nu se extrag subsecvențe multiple din același videoclip și nu se folosește o tehnică de tip fereastră glisantă (\textit{sliding window}); un videoclip produce strict un singur exemplu. În consecință, este exclusă situația în care un fragment dintr-un videoclip să ajungă la antrenare, iar o altă secțiune a \textit{aceluiași} fișier să ajungă la validare. Problema este eliminată prin însăși concepția sistemului, videoclipul fiind o unitate indivizibilă.
+
+Împărțirea se face la nivel de fișier, în directoare fizic separate. Datele de antrenare și cele de validare provin din directoare complet distincte (\inlinecode{data/train/} și, respectiv, \inlinecode{data/test/}), fiecare având propriile subdirectoare per clasă. Repartizarea videoclipurilor în cele două locații a fost realizată \textit{înainte} de faza de antrenare, la nivel de fișier complet, asigurând că un videoclip aparține exclusiv antrenării sau validării, niciodată amândurora. La execuție, funcția \inlinecode{build\_dataloaders()} încarcă informațiile din \inlinecode{data/train/} pentru antrenament și folosește direct \inlinecode{data/test/} drept set de validare.
+
+În total, setul de date cuprinde \textbf{2538 de videoclipuri}, repartizate în \textbf{2097 de videoclipuri pentru antrenare} (\inlinecode{normal}: 829, \inlinecode{fight}: 771, \inlinecode{vandalism}: 497) și \textbf{441 de videoclipuri pentru validare} (\inlinecode{normal}: 169, \inlinecode{fight}: 155, \inlinecode{vandalism}: 117). Cifrele aferente setului de validare corespund coloanei \textit{Suport} din analiza per clasă (Tabelul~\ref{tab:per_clasa_actiuni}) și reprezintă numărul de videoclipuri pe care s-au calculat metricile finale. Pentru clasele \inlinecode{normal} și \inlinecode{fight} s-a păstrat împărțirea predefinită a setului original RWF-2000. Pentru clasa \inlinecode{vandalism} (care folosește setul de date propriu, cele 614 videoclipuri menționate anterior), fișierele au fost repartizate manual în cele două directoare, respectând aceeași regulă de separare la nivel de fișier.
+
 \subsection{Pregătirea modelului pentru fine-tuning}
 \label{subsec:pregatire_finetuning}
 
@@ -758,27 +774,30 @@ Alți parametri și tehnici folosite, conform \inlinecode{config.py} și \inline
     epoci);
     \item \textbf{Funcția de pierdere}: \inlinecode{CrossEntropyLoss} cu \textit{label smoothing}
     de $0{,}1$, pentru a reduce supraîncrederea modelului;
-    \item \textbf{Dezechilibrul de clase}: tratat printr-un \inlinecode{WeightedRandomSampler}, care
-    eșantionează clasele invers proporțional cu frecvența lor, astfel încât fiecare clasă să fie
-    reprezentată echilibrat în batch-uri;
-    \item \textbf{Tehnici de stabilizare}: antrenare în precizie mixtă (AMP, prin
-    \inlinecode{GradScaler} și \inlinecode{autocast}), \textit{gradient clipping} la norma maximă
-    $5{,}0$ și \textit{early stopping} (răbdare de 7 epoci) bazat pe macro-F1 de validare;
+    \item \textbf{Dezechilibrul de clase}: deoarece numărul de clipuri diferă între categorii,
+    dezechilibrul a fost tratat la nivelul \textit{eșantionării}, nu al funcției de pierdere,
+    printr-un \inlinecode{WeightedRandomSampler}. Concret, se numără clipurile fiecărei clase din
+    setul de antrenare, iar fiecărui clip i se atribuie o pondere invers proporțională cu frecvența
+    clasei sale ($w_c = 1 / n_c$, unde $n_c$ este numărul de clipuri din clasa $c$). La fiecare epocă,
+    eșantionatorul extrage același număr total de clipuri, dar \textit{cu revenire} și conform acestor
+    ponderi, astfel încât clipurile claselor minoritare sunt selectate de mai multe ori
+    (supra-eșantionare), iar cele ale claselor majoritare mai rar (sub-eșantionare). În acest fel,
+    fiecare clasă ajunge să fie reprezentată aproximativ egal în loturi, fără a modifica numărul de
+    iterații per epocă și fără a duplica fizic fișierele pe disc. (Întrucât \inlinecode{PyTorch} nu
+    permite folosirea simultană a unui eșantionator și a amestecării aleatoare, \inlinecode{shuffle}
+    este dezactivat automat când eșantionatorul este activ, ordinea aleatoare fiind deja asigurată de
+    extragerea ponderată.)
+    \item \textbf{Tehnici de stabilizare}: antrenare cu precizie mixtă (AMP, utilizând \inlinecode{GradScaler} și \inlinecode{autocast}), limitarea gradientului (\textit{gradient clipping}) la norma maximă de $5{,}0$ și oprire timpurie (\textit{early stopping}) cu o toleranță de 7 epoci, evaluată pe baza scorului macro-F1 de validare;
     \item \textbf{Augmentare spațială}: oglindire orizontală, \textit{color jitter} și
     \textit{random crop}.
 \end{itemize}
 
-Din cele 30 de epoci planificate, antrenarea s-a oprit la epoca 28 prin early stopping, cele mai
-bune rezultate (cele salvate ca \inlinecode{best\_model.pth}) fiind obținute la epoca 21.
-Antrenarea a folosit 262 de batch-uri pe epocă la antrenare și 56 la validare, cu o durată medie
-de aproximativ 15 minute per epocă.
+Din totalul de 30 de epoci planificate, procesul de antrenare s-a oprit automat la epoca 28 datorită mecanismului de oprire timpurie (\textit{early stopping}). Cele mai bune rezultate (salvate în fișierul \inlinecode{best\_model.pth}) au fost obținute la epoca 21. La nivel de iterație, s-au utilizat 262 de loturi de date (\textit{batches}) pentru faza de antrenament și 56 pentru cea de validare, cu o durată medie de execuție de aproximativ 15 minute per epocă.
 
 \subsection{Rezultatele}
 \label{subsec:rezultate_actiuni}
 
-Metricile globale obținute pe setul de validare de către modelul cel mai bun (epoca 21) sunt
-sintetizate în tabelul~\ref{tab:rezultate_actiuni}. Pierderea finală de antrenare a fost de
-$0{,}3065$, iar cea de validare de $0{,}4306$.
+Metricile globale obținute pe setul de validare de către cel mai bun model (epoca 21) sunt sintetizate în Tabelul~\ref{tab:rezultate_actiuni}. Valoarea finală a funcției de cost (\textit{loss}) pentru antrenare a fost de $0{,}3065$, iar pentru validare a înregistrat $0{,}4306$.
 
 \begin{table}[h]
     \centering
@@ -796,9 +815,7 @@ $0{,}3065$, iar cea de validare de $0{,}4306$.
     \end{tabular}
 \end{table}
 
-Modelul atinge o acuratețe globală de $94{,}33\%$ și un macro F1-score de $94{,}56\%$, valori
-foarte bune pentru o problemă de clasificare a acțiunilor pe trei clase, în condiții de
-supraveghere reale.
+Modelul atinge o acuratețe globală de $94{,}33\%$ și un scor macro-F1 de $94{,}56\%$, valori foarte bune pentru o problemă de clasificare a acțiunilor pe trei clase, în condiții reale de supraveghere video.
 
 \subsection{Analiza per clasă}
 \label{subsec:analiza_per_clasa}
@@ -820,14 +837,7 @@ Rezultatele detaliate pe fiecare clasă sunt prezentate în tabelul~\ref{tab:per
     \end{tabular}
 \end{table}
 
-Se remarcă faptul că tocmai clasa \inlinecode{vandalism} -- cea pentru care a fost construit
-datasetul propriu -- obține cele mai bune rezultate, cu o precizie de $98{,}2\%$ și un F1-score de
-$0{,}965$. Acest rezultat validează efortul de creare a datasetului custom: clipurile selectate
-și editate manual sunt suficient de curate și de reprezentative pentru ca modelul să învețe
-robust această clasă. Clasele \inlinecode{normal} și \inlinecode{fight} obțin de asemenea scoruri
-ridicate (F1 de $0{,}933$, respectiv $0{,}939$), confuziile reziduale fiind, în mod așteptat,
-preponderent între ele -- ambele provin din același dataset RWF-2000 și pot conține secvențe
-ambigue la granița dintre activitate agitată și altercație.
+ Datele de evaluare evidențiază performanța optimă obținută pe clasa \linebreak \inlinecode{vandalism} (o precizie de $98{,}2\%$ și un scor F1 de $0{,}965$), pentru care a fost utilizat setul de date propriu. Nivelul ridicat al metricilor indică faptul că secvențele video agregate și verificate manual oferă o reprezentare suficient de stabilă pentru a permite modelului o clasificare sigură. Categoriile \inlinecode{normal} și \inlinecode{fight} mențin, de asemenea, performanțe ridicate (scoruri F1 de $0{,}933$, respectiv $0{,}939$). Erorile de clasificare reziduale se manifestă, în mod previzibil, preponderent între aceste două clase, ambele provenind din setul de date RWF-2000. Acest comportament poate fi atribuit prezenței unor secvențe cu ambiguitate vizuală ridicată, situate la granița dintre o activitate umană rapidă și o altercație fizică propriu-zisă.
 
 \subsubsection{Integrarea în aplicație}
 La rulare, modelul antrenat este folosit de \inlinecode{HumanActionRecognitionSystem}, care nu
@@ -868,42 +878,16 @@ blocheze bucla de evenimente a serverului FastAPI. Pipeline-ul folosește în to
 \subsection{Dispecerizarea cadrelor și procesarea în paralel}
 \label{subsec:dispecerizare}
 
-Firul de captură (Thread~1) citește cadre de la toate camerele active (camera laptop-ului și
-eventualele camere IP). Fiecărui cadru i se atribuie un identificator unic și monoton crescător,
-\inlinecode{frame\_id}, care va servi drept cheie de sincronizare pe tot parcursul pipeline-ului.
-Cadrul este apoi \textit{dispecerizat} de metoda \inlinecode{\_dispatch\_frame()}, care îi pune
-câte o copie în coada de intrare a fiecărui modul activat (\inlinecode{face\_processing\_queue},
-\inlinecode{plate\_processing\_queue} etc.) și, separat, în coada de cadre brute
-(\inlinecode{raw\_frame\_queue}), care păstrează imaginea originală pentru recompunere.
+Firul de execuție responsabil de captură (Thread~1) preia cadrele de la toate camerele active. Fiecărui cadru i se atribuie un identificator unic, monoton crescător, denumit \inlinecode{frame\_id}, care va servi drept cheie de sincronizare pe parcursul întregului flux de prelucrare. Ulterior, cadrul este distribuit de metoda \inlinecode{\_dispatch\_frame()}, care inserează câte o copie a acestuia în coada de intrare aferentă fiecărui modul activ (\inlinecode{face\_processing\_queue}, \inlinecode{plate\_processing} \linebreak \inlinecode{\_queue} etc.) și, în mod distinct, în coada cadrelor brute (\inlinecode{raw\_frame\_queue}), necesară pentru recompunerea imaginii finale.
 
-Fiecare modul AI rulează în propriul fir, consumând cadre din coada sa, executând inferența și
-publicând rezultatele în coada sa de ieșire (\inlinecode{face\_results\_queue} etc.). Cum cozile
-au capacitate mărginită (\inlinecode{maxsize=10}), atunci când un modul lent nu mai poate prelua
-cadre, dispecerul nu blochează, ci sare peste cadru (incrementând un contor de
-\inlinecode{queue\_skips} / \inlinecode{frames\_dropped}). Astfel, un model mai lent degradează
-elegant rata de cadre, fără a opri întregul sistem.
+Fiecare modul de inteligență artificială operează într-un fir de execuție independent, extrăgând cadre din propria coadă, rulând algoritmul de inferență și publicând rezultatele în coada de ieșire specifică (\inlinecode{face\_results\_queue} etc.). Deoarece aceste cozi sunt implementate cu o capacitate limitată (\inlinecode{maxsize=10}), în situația în care un modul necesită un timp de procesare mai lung și nu mai poate prelua date noi, funcția de distribuție nu se blochează, ci omite cadrul respectiv (incrementând un contor intern de tip \inlinecode{queue\_skips} / \inlinecode{frames\_dropped}). Această decizie arhitecturală asigură o degradare controlată a ratei de procesare a cadrelor, garantând continuitatea execuției pentru restul sistemului.
 
 \subsection{Sincronizarea rezultatelor după \textit{frame\_id}}
 \label{subsec:sincronizare}
 
-Firul de fuziune (Thread~7) are sarcina dificilă de a recombina rezultate care sosesc
-\textit{asincron}: modulul de plăcuțe poate termina cadrul $N$ înainte ca modulul facial să
-termine cadrul $N-2$. Pentru aceasta, firul menține un dicționar \inlinecode{pending\_results},
-cu câte o intrare pentru fiecare tip de rezultat (\inlinecode{frames}, \inlinecode{face},
-\inlinecode{plate}, \inlinecode{fire}, \inlinecode{har}, \inlinecode{weapon}), indexată după
-\inlinecode{frame\_id}. La fiecare iterație, firul golește toate cozile de rezultate disponibile
-în acest dicționar, apoi încearcă să \textit{asambleze} fiecare cadru pentru care a sosit imaginea
-brută.
+Firul de execuție responsabil de fuziunea datelor (Thread~7) gestionează procesul complex de recombinare a rezultatelor generate \textit{asincron}. De exemplu, modulul pentru identificarea plăcuțelor poate finaliza procesarea cadrului $N$ înainte ca modulul facial să termine cadrul $N-2$. Pentru a rezolva această asimetrie temporală, sistemul menține un dicționar, \inlinecode{pending\_results}, care include câte o structură de reținere pentru fiecare categorie de rezultat (\inlinecode{frames}, \inlinecode{face}, \inlinecode{plate}, \inlinecode{fire}, \inlinecode{har}, \inlinecode{weapon}), indexată pe baza identificatorului \inlinecode{frame\_id}. La fiecare iterație, acest fir extrage toate datele disponibile din cozile de ieșire, populând dicționarul, după care încearcă să \textit{agregheze} fiecare cadru pentru care a fost recepționată imaginea brută.
 
-Un cadru este considerat gata de asamblare atunci când rezultatele modulelor \textit{esențiale}
-activate (recunoaștere facială și plăcuțe) au sosit. Rezultatele modulelor de foc, acțiuni și arme
-sunt tratate ca \textit{opționale}: ele sunt suprapuse dacă au sosit, dar absența lor nu blochează
-asamblarea. Pentru a evita blocajul atunci când un rezultat nu mai sosește (de exemplu, din cauza
-unui cadru sărit), există un mecanism de \textit{timeout}: dacă un cadru devine prea vechi
-(diferența dintre \inlinecode{frame\_id}-ul curent și al lui depășește 60), el este asamblat cu
-rezultatele disponibile la acel moment, fără a mai aștepta. În plus, o rutină de curățare
-(\inlinecode{\_cleanup\_old\_results()}) elimină periodic intrările mai vechi de 90 de cadre,
-pentru ca dicționarul să nu crească nelimitat în caz de desincronizare.
+Un cadru este validat pentru agregare în momentul în care au sosit rezultatele furnizate de modulele \textit{esențiale} activate (recunoașterea facială și a plăcuțelor). Rezultatele provenite de la modulele pentru foc, acțiuni și arme sunt tratate ca \textit{opționale}: acestea sunt integrate în imagine doar dacă sunt deja disponibile, fără ca absența lor să blocheze procesul de asamblare. Pentru a preveni stările de așteptare infinită cauzate de rezultate lipsă (de exemplu, pe fondul omiterii anterioare a unui cadru), este implementat un mecanism de limitare a așteptării (\textit{timeout}): dacă decalajul dintre \inlinecode{frame\_id}-ul curent și cel al cadrului evaluat depășește 60 de indici, cadrul este asamblat forțat utilizând exclusiv datele parțiale disponibile la acel moment. Adițional, o rutină de mentenanță (\inlinecode{\_cleanup\_old\_results()}) elimină periodic intrările cu o vechime mai mare de 90 de cadre, prevenind astfel creșterea necontrolată a dicționarului în caz de desincronizări severe.
 
 \subsection{Compunerea cadrului adnotat}
 \label{subsec:compunere}
@@ -911,9 +895,9 @@ pentru ca dicționarul să nu crească nelimitat în caz de desincronizare.
 Odată ce un cadru este gata de asamblare, adnotările celor cinci module sunt desenate
 \textit{în straturi} peste imagine, într-o ordine fixă. Punctul de plecare este cadrul deja
 adnotat de modulul facial (care conține chenarele fețelor și etichetele demografice), peste care
-se aplică succesiv: chenarele plăcuțelor (\inlinecode{plate\_system.draw\_outputs()}), detecțiile
-de foc confirmate (\inlinecode{fire\_system.draw\_detections()}), eticheta acțiunii recunoscute
-(\inlinecode{har\_system.draw\_detections()}) și, la final, chenarele armelor
+se aplică succesiv: chenarele plăcuțelor (\inlinecode{plate\_system.} \inlinecode{draw\_outputs()}), detecțiile
+de foc confirmate (\inlinecode{fire\_system.draw} \linebreak \inlinecode{\_detections()}), eticheta acțiunii recunoscute
+(\inlinecode{har\_system.draw\_detections} \linebreak \inlinecode{()}) și, la final, chenarele armelor
 (\inlinecode{weapon\_system.draw\_detections()}). Rezultatul este un singur cadru
 (\inlinecode{final\_frame}) care concentrează vizual toate detecțiile celor cinci module pentru
 acel moment de timp.
@@ -921,42 +905,15 @@ acel moment de timp.
 \subsection{Generarea alarmelor și deduplicarea}
 \label{subsec:alarme}
 
-În aceeași etapă de fuziune, detecțiile relevante sunt transformate în două tipuri de înregistrări
-persistente: \textit{jurnale de detecție} (un istoric complet, scris prin
-\inlinecode{\_log\_detection\_if\_needed()}) și \textit{alarme} propriu-zise (evenimente care
-necesită atenția operatorului). Sunt considerate demne de alarmă: persoanele necunoscute, focul
-confirmat cu \inlinecode{alert}, acțiunile non-\inlinecode{normal}, armele detectate, vehiculele
-neautorizate (plăcuțe lizibile care nu sunt pe lista albă) și prezența unei persoane neautorizate
-într-o zonă restricționată.
+În cadrul aceleiași etape de fuziune, detecțiile de interes sunt convertite în două categorii de înregistrări persistente: \textit{jurnale de detecție} (un istoric exhaustiv, generat prin apelul funcției \inlinecode{\_log\_detection\_if\_needed()}) și \textit{alarme} propriu-zise (evenimente critice care necesită atenția imediată a operatorului). Sunt clasificate drept evenimente de alarmă următoarele situații: prezența persoanelor neidentificate, detectarea confirmată a focului (marcată cu parametrul \inlinecode{alert}), identificarea unor acțiuni diferite de clasa \inlinecode{normal}, detecția armamentului, prezența vehiculelor neautorizate (plăcuțe lizibile care nu figurează în lista de acces) și pătrunderea unei persoane neautorizate într-o zonă restricționată.
 
-Problema centrală a generării alarmelor este evitarea inundării operatorului cu duplicate: un foc
-care arde 10 secunde nu trebuie să genereze o alarmă la fiecare cadru. Mecanismul de deduplicare,
-implementat în \inlinecode{\_create\_alarm\_if\_needed()}, folosește o cheie compusă din cameră,
-tip și \textit{subiect} (\inlinecode{camera\_id:alarm\_type:dedup\_subject}) și un cooldown de 30
-de secunde per cheie. Componenta de subiect este esențială: ea permite ca alarme distincte de
-\textit{același} tip să coexiste -- de exemplu, două persoane necunoscute diferite (diferențiate
-prin poziție), un cuțit și un pistol, sau două plăcuțe neautorizate diferite -- fără a se
-contopi într-o singură alarmă. Pe lângă bariera din memorie, există și o verificare de rezervă în
-baza de date (\inlinecode{get\_recent\_alarm()}), care previne avalanșa de alarme duplicate
-imediat după o repornire a serverului, când starea de cooldown din memorie este goală.
+Problema principală în gestionarea alarmelor o constituie evitarea saturării operatorului cu notificări redundante: un focar de incendiu activ timp de 10 secunde nu trebuie să declanșeze o avertizare la fiecare cadru analizat. Mecanismul de deduplicare, implementat în metoda \inlinecode{\_create\_alarm\_if\_needed()}, utilizează o cheie de indexare compusă, formată din identificatorul camerei, tipul evenimentului și \textit{subiectul} alarmei (\inlinecode{camera\_id:alarm\_type:dedup\_subject}), impunând o perioadă de latență (\textit{cooldown}) de 30 de secunde pentru fiecare cheie unică. Includerea subiectului în cheie este esențială, deoarece permite coexistența unor alarme distincte de \textit{același} tip -- de exemplu, două persoane necunoscute diferite (diferențiate pe baza coordonatelor spațiale), un cuțit și un pistol, sau două autovehicule neautorizate distincte -- fără ca acestea să fie comasate eronat într-o singură alertă. Complementar acestui mecanism de filtrare în memoria volatilă, sistemul execută o verificare redundantă în baza de date (prin metoda \inlinecode{get\_recent\_alarm()}). Această abordare previne o cascadă de alarme duplicate ce ar putea surveni imediat după o repornire a serverului, moment în care istoricul stărilor de latență din memorie este neinițializat.
 
 \subsection{Difuzarea către clienți prin WebSocket}
 \label{subsec:difuzare}
 
-Ultimul pas al fuziunii este livrarea cadrului asamblat către interfețele clienților. Cadrul
-\inlinecode{final\_frame} este redimensionat (la maximum 800~px lățime), codat JPEG cu o calitate
-de 75 și convertit în Base64 prin \inlinecode{\_encode\_and\_queue\_frame()}. Acesta este împachetat
-într-un mesaj JSON care conține, pe lângă imagine, listele de rezultate serializate ale tuturor
-modulelor (\inlinecode{face\_results}, \inlinecode{plate\_results}, \inlinecode{fire\_results},
-\inlinecode{har\_results}, \inlinecode{weapon\_results}), identificatorul camerei, un
-\textit{timestamp} și starea (activat/dezactivat) a fiecărui modul.
+Ultima etapă a procesului de fuziune constă în transmiterea cadrului agregat către interfețele clienților. Imaginea \inlinecode{final\_frame} este redimensionată (la o lățime maximă de 800~px), comprimată în format JPEG cu un factor de calitate de 75 și convertită în format Base64 prin intermediul funcției \inlinecode{\_encode\_and\_queue} \inlinecode{\_frame()}. Datele sunt apoi încapsulate într-un obiect JSON care conține, pe lângă imaginea propriu-zisă, listele serializate cu rezultatele tuturor modulelor (\inlinecode{face\_results}, \inlinecode{plate\_results}, \inlinecode{fire\_results}, \inlinecode{har\_results}, \inlinecode{weapon} \inlinecode{\_results}), identificatorul camerei, un marcaj temporal (\textit{timestamp}) și starea curentă (activat/dezactivat) a fiecărui modul.
 
-Difuzarea propriu-zisă (\inlinecode{\_broadcast\_frame()}) folosește un model de tip
-\textit{fan-out} cu cozi independente per client: fiecare client conectat prin WebSocket are
-propria coadă de ieșire, iar firul de fuziune publică fiecare cadru procesat în toate cozile.
-Această izolare este importantă -- un client lent își aruncă doar propriul cadru cel mai vechi
-atunci când coada lui se umple, fără a ``fura'' cadre de la ceilalți clienți sau a-i încetini.
-Astfel, fluxul video adnotat ajunge la fiecare operator în mod independent, încheind ciclul de
-procesare care a pornit de la captura cadrului brut.
+Difuzarea mesajelor (\inlinecode{\_broadcast\_frame()}) utilizează un model de distribuție de tip \textit{fan-out}, implementat cu cozi independente pentru fiecare client. Mai exact, fiecare utilizator conectat prin WebSocket dispune de propria coadă de ieșire, iar firul de fuziune inserează fiecare cadru procesat în toate aceste cozi. Această izolare arhitecturală este esențială: în cazul în care un client are o conexiune mai lentă și coada i se umple, acesta va elimina automat doar cel mai vechi cadru din propriul flux, fără a interfera cu pachetele destinate celorlalți clienți și fără a genera întârzieri la nivelul sistemului. Astfel, fluxul video adnotat este livrat fiecărui operator în mod independent, finalizând ciclul de procesare inițiat la captura cadrului brut.
 
 \end{document}
