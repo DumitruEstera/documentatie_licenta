@@ -34,16 +34,16 @@ publică rezultatele în coada de fuziune (a se vedea secțiunea~\ref{sec:fuziun
 \subsection{Detecția fețelor și extragerea reprezentărilor vectoriale}
 \label{subsec:detectie_extragere}
 
-Detecția fețelor și extragerea descriptorilor numerici (vectori de caracteristici) sunt realizate
+Detecția fețelor și extragerea vectorilor de caracteristici sunt realizate
 de obiectul \inlinecode{FaceAnalysis} din InsightFace, inițializat cu pachetul de
 modele \inlinecode{buffalo\_s}. Acest pachet reunește trei submodele care, în
 abordarea tradițională, ar fi necesitat încărcarea și apelarea separată:
 
 \begin{itemize}
-    \item \textbf{det\_500m} -- detectorul de fețe, care returnează bounding box-ul
+    \item \textbf{det\_500m} -- detectorul de fețe, care returnează caseta de încadrare (\textit{bounding box})
     și cele cinci puncte caracteristice (landmark-uri) pentru fiecare față din cadru;
     \item \textbf{w600k\_mbf} -- rețeaua de recunoaștere, o variantă MobileFaceNet
-    antrenată pe datasetul Glint360K cu funcția de pierdere ArcFace, care produce
+    antrenată pe setul de date Glint360K cu funcția de pierdere ArcFace, care produce
     vectorul de caracteristici facial de 512 dimensiuni;
     \item capul \textbf{genderage} -- care estimează vârsta și genul persoanei.
 \end{itemize}
@@ -169,7 +169,7 @@ Vizual, fețele cunoscute sunt marcate cu un chenar verde și eticheta
 \subsection{Optimizarea: omiterea analizei demografice pentru fețele cunoscute}
 \label{subsec:optimizare_demografica}
 
-O optimizare deliberată la nivelul \emph{pipeline}-ului de procesare facială constă în condiționarea analizei demografice de rezultatul etapei de recunoaștere. În cadrul funcției \inlinecode{process\_frame()}, atributele demografice (precum vârsta și genul, generate de modulul \inlinecode{genderage} al arhitecturii InsightFace, alături de emoția prezisă de rețeaua Mini-Xception, detaliată în Secțiunea~\ref{sec:analiza_demografica}) sunt calculate \emph{exclusiv pentru fețele necunoscute}. În cazul unei persoane identificate cu succes, câmpurile \inlinecode{age}, \inlinecode{gender}, \inlinecode{emotion} și \inlinecode{emotion\_confidence} sunt inițializate direct cu valoarea \inlinecode{None}.
+O optimizare deliberată la nivelul \emph{pipeline}-ului de procesare facială constă în condiționarea analizei demografice de rezultatul etapei de recunoaștere. Vârsta și genul sunt generate de modulul \inlinecode{genderage} al arhitecturii InsightFace pentru toate fețele dintr-un cadru, în aceeași trecere care produce și vectorul de caracteristici --- acest cost nu poate fi evitat per-față. În cadrul funcției \inlinecode{process\_frame()}, aceste atribute sunt însă reținute și expuse \emph{exclusiv pentru fețele necunoscute}, iar emoția prezisă de rețeaua Mini-Xception (detaliată în Secțiunea~\ref{sec:analiza_demografica}) este calculată tot \emph{numai pentru fețele necunoscute}, printr-o trecere suplimentară. În cazul unei persoane identificate cu succes, câmpurile \inlinecode{age}, \inlinecode{gender}, \inlinecode{emotion} și \inlinecode{emotion\_confidence} sunt inițializate direct cu valoarea \inlinecode{None}.
 
 Raționamentul are atât o componentă de proiectare, cât și una de performanță. Din perspectivă semantică, calcularea informațiilor demografice pentru o persoană deja recunoscută reprezintă o operațiune redundantă, întrucât identitatea, vârsta exactă și departamentul sunt deja disponibile în baza de date. Din punct de vedere al performanței, această decizie elimină necesitatea unei treceri suplimentare (\emph{forward-pass}) prin rețeaua de clasificare a emoțiilor pentru fețele cunoscute, la fiecare cadru. Economia de resurse este considerabilă, în special pentru că inferența rețelei Mini-Xception se execută pe unitatea CPU. Prin urmare, costul computațional aferent analizei demografice este asumat doar atunci când generează informație utilă, adică în cazul persoanelor neidentificate,  pentru care caracterizarea demografică și emoțională devine relevantă în scenariile de supraveghere.
 
@@ -182,7 +182,7 @@ niciunei intrări din baza de date. Această analiză produce trei atribute pent
 fiecare astfel de față: vârsta estimată, genul și emoția. Implementarea este integrată
 în aceeași clasă \inlinecode{FacialRecognitionSystem} și în aceeași metodă
 \inlinecode{process\_frame()} ca recunoașterea facială, evitând o trecere separată de
-detecție a fețelor. După cum a fost detaliat în secțiunea~\ref{subsec:optimizare_demografica}, aplicarea analizei demografice este strict condiționată (vizând exclusiv fețele necunoscute), întrucât estimarea acestor atribute devine redundantă în cazul persoanelor deja identificate.
+detecție a fețelor. Vârsta și genul sunt produse de modulul \inlinecode{genderage} al InsightFace pentru \emph{toate} fețele detectate, în aceeași trecere care generează și vectorul de caracteristici, fiind însă reținute și afișate exclusiv pentru fețele necunoscute; în schimb, estimarea emoției, care presupune o trecere suplimentară prin rețeaua Mini-Xception, este efectuată doar pentru fețele necunoscute. După cum a fost detaliat în secțiunea~\ref{subsec:optimizare_demografica}, pentru persoanele deja identificate câmpurile \inlinecode{age}, \inlinecode{gender}, \inlinecode{emotion} și \inlinecode{emotion\_confidence} sunt lăsate la valoarea \inlinecode{None}, întrucât caracterizarea lor demografică ar fi redundantă.
 
 Extragerea atributelor se bazează pe două modele distincte: vârsta și genul sunt furnizate de modulul \inlinecode{genderage} din cadrul arhitecturii InsightFace (deja evaluat implicit prin execuția pachetului \inlinecode{buffalo\_s}), în timp ce starea emoțională este estimată de o rețea convoluțională independentă, Mini-Xception, aplicată direct pe regiunea facială decupată (\emph{face crop}).
 
@@ -213,7 +213,7 @@ de InsightFace, fiind doar citite și formatate.
 Spre deosebire de vârstă și gen, emoția este clasificată de un model separat:
 Mini-Xception, o rețea neuronală convoluțională compactă furnizată de pachetul Python
 \inlinecode{fer} sub forma fișierului de ponderi \inlinecode{emotion\_model.hdf5}. Modelul este
-antrenat pe datasetul FER-2013 și clasifică expresia facială într-una din șapte categorii,
+antrenat pe setul de date FER-2013 și clasifică expresia facială într-una din șapte categorii,
 ordonate conform ieșirilor softmax ale modelului în tuplul \inlinecode{\_EMOTION\_LABELS}:
 \inlinecode{angry}, \inlinecode{disgust}, \inlinecode{fear}, \inlinecode{happy},
 \inlinecode{sad}, \inlinecode{surprise} și \inlinecode{neutral}.
@@ -228,7 +228,7 @@ cu crop-ul facial deja delimitat de bounding box-ul InsightFace. Astfel se elimi
 detecție de fețe duplicată și se garantează că emoția este clasificată exact pe regiunea
 identificată de pipeline-ul principal.
 
-Predicția propriu-zisă, implementată în metoda \inlinecode{\_classify\_emotion()}, constă într-o etapă de propagare directă (\emph{forward pass}) prin rețea, urmată de aplicarea operației \inlinecode{argmax} pe cele șapte probabilități furnizate de funcția \emph{softmax}. Rezultatul returnat este un tuplu format din eticheta emoției și scorul de confidență asociat. Dimensiunea de intrare necesară modelului este extrasă automat din proprietatea \inlinecode{input\_shape}, asigurând astfel adaptarea dinamică a etapei de preprocesare (detaliată în continuare) la arhitectura specifică rețelei.
+Predicția propriu-zisă, implementată în metoda \inlinecode{\_classify\_emotion()}, constă într-o etapă de propagare directă (\emph{forward pass}) prin rețea, urmată de aplicarea operației \inlinecode{argmax} pe cele șapte probabilități furnizate de funcția \emph{softmax}. Rezultatul returnat este un tuplu format din eticheta emoției și scorul de încredere asociat. Dimensiunea de intrare necesară modelului este extrasă automat din proprietatea \inlinecode{input\_shape}, asigurând astfel adaptarea dinamică a etapei de preprocesare (detaliată în continuare) la arhitectura specifică rețelei.
 
 % [DIAGRAMĂ SUGERATĂ] Aici s-ar potrivi o diagramă a fluxului analizei pe o față
 % necunoscută: cadru → InsightFace (bbox + landmarks + embedding + vârstă/gen) →
@@ -289,7 +289,7 @@ execuție dedicat (\textit{Thread~3}).
 \subsection{Detecția plăcuțelor cu YOLOv8}
 \label{subsec:detectie_placute}
 
-Localizarea plăcuțelor în cadru este realizată cu ajutorul unui model YOLOv8, instanțiat prin intermediul clasei \inlinecode{YOLO} din pachetul \inlinecode{ultralytics}, pe baza fișierului de ponderi \inlinecode{models/license\_plate/best.pt}. Modelul de bază utilizat este \inlinecode{harshitsingh09/yolov8-license-plate-detector}, o variantă a arhitecturii YOLOv8 publicată pe platforma Kaggle și dedicată exclusiv detecției plăcuțelor de înmatriculare (având definită o singură clasă, \inlinecode{license\_plate}). Modelul a fost integrat în sistem în forma sa originală, fără a necesita o etapă suplimentară de antrenare (\emph{fine-tuning}) în cadrul acestui proiect. La momentul inițializării, pentru a optimiza viteza de inferență, sistemul verifică disponibilitatea mediului CUDA și, în caz afirmativ, transferă execuția modelului pe unitatea GPU.
+Localizarea plăcuțelor în cadru este realizată cu ajutorul unui model YOLOv8, instanțiat prin intermediul clasei \inlinecode{YOLO} din pachetul \inlinecode{ultralytics}, pe baza fișierului de ponderi \inlinecode{models/license\_plate/best.pt}. Modelul de bază utilizat este \inlinecode{harshitsingh09/yolov8-license-plate-detector}, o variantă a arhitecturii YOLOv8 publicată pe platforma Kaggle și dedicată exclusiv detecției plăcuțelor de înmatriculare (având definită o singură clasă, \inlinecode{license\_plate}). Modelul a fost integrat în sistem în forma sa originală, fără a necesita o etapă suplimentară de antrenare (ajustare fină) în cadrul acestui proiect. La momentul inițializării, pentru a optimiza viteza de inferență, sistemul verifică disponibilitatea mediului CUDA și, în caz afirmativ, transferă execuția modelului pe unitatea GPU.
 
 Pentru fiecare cadru procesat, metoda \inlinecode{process\_frame()} apelează funcția \inlinecode{predict()} utilizând parametrul \inlinecode{imgsz=640} și un prag de confidență \inlinecode{conf=0.25}, extrăgând astfel casetele de încadrare candidate (\emph{bounding boxes}). Fiecare casetă, definită prin coordonatele \inlinecode{[x1, y1, x2, y2]}, este ulterior \textit{extinsă} cu 20\% în toate direcțiile prin intermediul funcției \inlinecode{expand\_bbox()} (utilizând un coeficient \inlinecode{pad\_ratio} de \inlinecode{0.20}). Această margine de siguranță mai generoasă garantează includerea limitelor fizice ale plăcuței alături de un context vizual minim, prevenind astfel decuparea accidentală a caracterelor aflate la extremități înaintea evaluării OCR. Regiunea decupată rezultată este transmisă etapelor ulterioare de prelucrare.
 
@@ -390,7 +390,7 @@ Provocarea principală a acestui modul nu constă în detecția propriu-zisă, c
 \subsection{Modelul YOLOv10 pre-antrenat}
 \label{subsec:yolov10_preantrenat}
 
-Modelul de bază utilizat este \inlinecode{TommyNgx/YOLOv10-Fire-and-Smoke-Detection}, o variantă a arhitecturii YOLOv10 publicată pe platforma HuggingFace și antrenată specific pentru cele două clase de interes: \inlinecode{Fire} și \inlinecode{Smoke}. Modelul este integrat în sistem în forma sa originală, nefiind necesară o etapă suplimentară de reantrenare (\emph{fine-tuning}), și este instanțiat prin intermediul clasei \inlinecode{YOLO} (din pachetul \inlinecode{ultralytics}) pe baza fișierului de ponderi \inlinecode{models/fire\_and\_smoke/} \inlinecode{best.pt}. Imediat după încărcare, denumirile claselor sunt normalizate prin convertirea literelor în minuscule (\inlinecode{fire}, \inlinecode{smoke}), asigurând astfel o utilizare consecventă în restul fluxului de prelucrare.
+Modelul de bază utilizat este \inlinecode{TommyNgx/YOLOv10-Fire-and-Smoke-Detection}, o variantă a arhitecturii YOLOv10 publicată pe platforma HuggingFace și antrenată specific pentru cele două clase de interes: \inlinecode{Fire} și \inlinecode{Smoke}. Modelul este integrat în sistem în forma sa originală, nefiind necesară o etapă suplimentară de reantrenare (ajustare fină), și este instanțiat prin intermediul clasei \inlinecode{YOLO} (din pachetul \inlinecode{ultralytics}) pe baza fișierului de ponderi \inlinecode{models/fire\_and\_smoke/} \inlinecode{best.pt}. Imediat după încărcare, denumirile claselor sunt normalizate prin convertirea literelor în minuscule (\inlinecode{fire}, \inlinecode{smoke}), asigurând astfel o utilizare consecventă în restul fluxului de prelucrare.
 
 La nivelul fiecărui cadru, metoda \inlinecode{process\_frame()} execută funcția \linebreak \inlinecode{model.predict()} utilizând un prag de confidență egal cu \textit{cea mai mică} valoare dintre pragurile definite per clasă, alături de un prag IoU de \inlinecode{0.45} pentru algoritmul de suprimare a non-maximelor (NMS). Această abordare a fost aleasă în mod deliberat: modelului i se permite să returneze toate detecțiile candidate care depășesc pragul minim de confidență, urmând ca filtrarea riguroasă la nivel de clasă să fie aplicată ulterior, în mod explicit, de către mecanismul de procesare. Această arhitectură oferă un control deplin asupra procesului decizional de declanșare a alertelor.
 
@@ -447,10 +447,10 @@ Fiecare predicție returnată de metoda \inlinecode{process\_frame()} este înso
 
 Această decuplare a indicatorilor separă \textit{starea} sistemului (prezența validată a focului sau a fumului în cadrul curent) de \textit{evenimentul} de notificare (necesitatea declanșării imediate a unei alarme). Abordarea permite afișarea continuă a focarelor confirmate, eliminând totodată riscul generării unor alerte redundante.
 
-\section{Modulul de detecție a armelor (model fine-tuned propriu)}
+\section{Modulul de detecție a armelor (model ajustat fin propriu)}
 \label{sec:modul_arme}
 
-Spre deosebire de componentele anterioare, care integrează modele pre-antrenate în forma lor originală, modulul dedicat detecției de arme se fundamentează pe o arhitectură YOLOv8 reantrenată (\textit{fine-tuned}) integral în cadrul acestui proiect, utilizând un set de date construit special pentru această sarcină. Această decizie a fost motivată de absența unui model public suficient de robust pentru identificarea generică a armelor în scenariile de supraveghere video. Prezenta secțiune detaliază întregul flux de dezvoltare, pornind de la deciziile de proiectare (precum definirea unei singure clase de interes și selecția arhitecturii de bază), continuând cu etapa de colectare și uniformizare a setului de date, și finalizându-se cu parametrizarea procesului de antrenare și evaluarea rezultatelor obținute. Fluxul de antrenare este structurat modular în trei scripturi, executate secvențial: \inlinecode{01\_download\_datasets.py}, \inlinecode{02\_relabel\_and\_merge.py} și \inlinecode{03\_train\_yolo.py}.
+Spre deosebire de componentele anterioare, care integrează modele pre-antrenate în forma lor originală, modulul dedicat detecției de arme se fundamentează pe o arhitectură YOLOv8 reantrenată (ajustată fin) integral în cadrul acestui proiect, utilizând un set de date construit special pentru această sarcină. Această decizie a fost motivată de absența unui model public suficient de robust pentru identificarea generică a armelor în scenariile de supraveghere video. Prezenta secțiune detaliază întregul flux de dezvoltare, pornind de la deciziile de proiectare (precum definirea unei singure clase de interes și selecția arhitecturii de bază), continuând cu etapa de colectare și uniformizare a setului de date, și finalizându-se cu parametrizarea procesului de antrenare și evaluarea rezultatelor obținute. Fluxul de antrenare este structurat modular în trei scripturi, executate secvențial: \inlinecode{01\_download\_datasets.py}, \inlinecode{02\_relabel\_and\_merge.py} și \inlinecode{03\_train\_yolo.py}.
 
 \subsection{Justificarea unei singure clase \textit{weapon}}
 \label{subsec:justificare_clasa_unica}
@@ -460,10 +460,10 @@ Modelul este antrenat să recunoască o singură clasă generică, \inlinecode{w
 \subsection{Selectarea modelului de bază}
 \label{subsec:model_baza}
 
-Modelul de bază ales pentru antrenarea suplimentară (\textit{fine-tuning}) este \linebreak \textbfit{YOLOv8m} (varianta \textit{medium}), pre-antrenat pe setul de date COCO. Această variantă oferă un echilibru bun între acuratețe și viteză de inferență: este suficient de complexă pentru a învăța formele variate ale armelor, dar suficient de ușoară pentru a rula în timp real, alături de celelalte modele, pe același GPU. Procesul pornește de la ponderile COCO (\inlinecode{pretrained=True}), beneficiind astfel de trăsăturile vizuale generice deja învățate, pe baza cărora detectorul se adaptează la noua clasă.
+Modelul de bază ales pentru antrenarea suplimentară (ajustare fină) este \linebreak \textbfit{YOLOv8m} (varianta \textit{medium}), pre-antrenat pe setul de date COCO. Această variantă oferă un echilibru bun între acuratețe și viteză de inferență: este suficient de complexă pentru a învăța formele variate ale armelor, dar suficient de ușoară pentru a rula în timp real, alături de celelalte modele, pe același GPU. Procesul pornește de la ponderile COCO (\inlinecode{pretrained=True}), beneficiind astfel de trăsăturile vizuale generice deja învățate, pe baza cărora detectorul se adaptează la noua clasă.
 
 
-\subsection{Dataseturile utilizate}
+\subsection{Seturile de date utilizate}
 \label{subsec:dataseturi_arme}
 
 Deoarece niciun set de date public nu oferea, în mod individual, o acoperire suficientă pentru diversitatea tipurilor de arme, a condițiilor de iluminare și a perspectivelor necesare, s-a decis combinarea a două seturi de date independente. Acestea au fost preluate automat prin intermediul scriptului \inlinecode{01\_download\_datasets.py}:
@@ -482,33 +482,33 @@ Deoarece niciun set de date public nu oferea, în mod individual, o acoperire su
     Secțiunea~\ref{subsec:preprocesare_unificare}).
 \end{itemize}
 
-După combinare, datasetul final conține 14.336 de imagini și 12.592 de bounding box-uri,
+După combinare, setul de date final conține 14.336 de imagini și 12.592 de bounding box-uri,
 oferind o diversitate suficientă pentru antrenarea unui detector robust.
 
 \subsection{Preprocesarea și unificarea}
 \label{subsec:preprocesare_unificare}
 
-Cele două dataseturi folosesc scheme de etichetare diferite, astfel încât a fost necesară o
+Cele două seturi de date folosesc scheme de etichetare diferite, astfel încât a fost necesară o
 etapă de preprocesare pentru unificarea lor într-o structură YOLO coerentă, realizată de scriptul
 \inlinecode{02\_relabel\_and\_merge.py}. Operațiile principale sunt:
 
 \begin{itemize}
-    \item \textbf{Relabel} -- toate clasele de arme din ambele dataseturi sunt remapate la clasa
+    \item \textbf{Relabel} -- toate clasele de arme din ambele seturi de date sunt remapate la clasa
     unică \inlinecode{0} (\inlinecode{weapon}). În cazul Zenodo, toate cele cinci clase sunt
     arme, deci toate sunt păstrate; în cazul Roboflow, doar \inlinecode{pistol} și
     \inlinecode{knife} sunt păstrate, iar clasele non-armă (\inlinecode{smartphone},
     \inlinecode{billete}, \inlinecode{monedero}, \inlinecode{tarjeta}) sunt \textit{eliminate}
     din etichete;
-    \item \textbf{Merge} -- cele două dataseturi sunt unite într-o singură structură YOLO cu trei
+    \item \textbf{Merge} -- cele două seturi de date sunt unite într-o singură structură YOLO cu trei
     partiții (\inlinecode{train}, \inlinecode{valid}, \inlinecode{test}); partiția \inlinecode{val}
     a sursei Zenodo este redenumită \inlinecode{valid} pentru consistență. Important de subliniat:
     împărțirea în antrenare/validare/testare nu este efectuată în cadrul acestui proiect, ci este
     \textit{moștenită ca atare} din cele două seturi sursă, ambele livrate deja pre-partiționate
     (Zenodo cu \inlinecode{train/val/test}, iar exportul YOLOv8 al SOHAS cu \inlinecode{train/valid/test}).
     Scriptul nu aplică nicio re-partiționare aleatorie -- fiecare imagine rămâne în partiția pe care
-    o avea în datasetul de origine, iar partițiile omonime din cele două surse sunt concatenate;
+    o avea în setul de date de origine, iar partițiile omonime din cele două surse sunt concatenate;
     \item \textbf{Negative samples} -- exemplele negative nu necesită niciun tratament special
-    în scriptul de antrenare. O imagine este copiată în datasetul final chiar dacă fișierul ei de
+    în scriptul de antrenare. O imagine este copiată în setul de date final chiar dacă fișierul ei de
     etichetă rămâne gol, fie pentru că nu conținea nicio adnotare, fie pentru că singurele adnotări
     (telefon, portofel, bancnotă, card) au fost eliminate la pasul de \textit{relabel} de mai sus.
     YOLOv8 interpretează automat orice imagine cu fișier de etichetă gol drept fundal
@@ -521,7 +521,7 @@ etapă de preprocesare pentru unificarea lor într-o structură YOLO coerentă, 
 
 Întrucât partițiile sunt preluate din sursele originale, proporțiile finale rezultă din modul în
 care erau deja împărțite acestea, nu dintr-un raport impus de proiect. Pe cele 14.336 de imagini
-ale datasetului combinat, distribuția este de aproximativ \textbf{70\,\% antrenare} (10.041 imagini),
+ale setului de date combinat, distribuția este de aproximativ \textbf{70\,\% antrenare} (10.041 imagini),
 \textbf{15\,\% validare} (2.104 imagini) și \textbf{15\,\% testare} (2.191 imagini), adică un raport
 de aproximativ 70/15/15.
 
@@ -531,7 +531,7 @@ declarând o singură clasă (\inlinecode{nc: 1}, \inlinecode{names: \{0: weapon
 \subsection{Strategia de denumire (\textit{zen\_} / \textit{rf\_})}
 \label{subsec:strategie_denumire}
 
-O problemă subtilă la unirea a două dataseturi este coliziunea numelor de fișiere: ambele surse
+O problemă subtilă la unirea celor două seturi de date este coliziunea numelor de fișiere: ambele surse
 pot conține, de exemplu, o imagine numită \inlinecode{0001.jpg}, care s-ar suprascrie reciproc la
 copierea în directorul comun. Pentru a o evita, fiecărei imagini și etichete i se adaugă un prefix
 în funcție de sursă: \inlinecode{zen\_} pentru imaginile din Zenodo și \inlinecode{rf\_} pentru
@@ -604,16 +604,16 @@ sintetizate comparativ în tabelul~\ref{tab:rezultate_arme}.
     \end{tabular}
 \end{table}
 
-Pe setul de testare (2.191 de imagini nevăzute, dintre care 444 imagini de fundal fără nicio armă), modelul atinge o precizie de $94{,}3\%$ și o sensibilitate de $90{,}2\%$, cu un mAP@$0{,}5$ de $0{,}943$. Valoarea mAP@$0{,}5{:}0{,}95$ (media mAP peste pragurile IoU cuprinse între $0{,}5$ și $0{,}95$) este de $0{,}696$. Acest rezultat indică o localizare spațială bună, deși mai puțin exactă la pragurile IoU foarte stricte (un comportament tipic pentru detecția obiectelor cu forme și orientări foarte variate, cum sunt armele). În esență, metricile pe test sunt practic identice cu cele de validare (diferențe sub un punct procentual, în ambele sensuri). Aceasta confirmă o bună capacitate de generalizare a modelului și absența fenomenului de supraînvățare (\textit{overfitting}): performanța raportată nu este doar o consecință a adaptării la setul de validare folosit pentru monitorizarea antrenamentului.
+Pe setul de testare (2.191 de imagini nevăzute, dintre care 444 imagini de fundal fără nicio armă), modelul atinge o precizie de $94{,}3\%$ și o sensibilitate de $90{,}2\%$, cu un mAP@$0{,}5$ de $0{,}943$. Valoarea mAP@$0{,}5{:}0{,}95$ (media mAP peste pragurile IoU cuprinse între $0{,}5$ și $0{,}95$) este de $0{,}696$. Acest rezultat indică o localizare spațială bună, deși mai puțin exactă la pragurile IoU foarte stricte (un comportament tipic pentru detecția obiectelor cu forme și orientări foarte variate, cum sunt armele). În esență, metricile pe test sunt practic identice cu cele de validare (diferențe sub un punct procentual, în ambele sensuri). Aceasta confirmă o bună capacitate de generalizare a modelului și absența fenomenului de supraînvățare (\textit{overfitting}).
 
 \subsection{Discuție asupra rezultatelor}
 \label{subsec:discutie_arme}
 
 Valorile obținute sunt solide pentru o sarcină dificilă: detecția unei clase vizual eterogene (o armă de foc, un cuțit și o bâtă de baseball au foarte puține trăsături comune), pe un set de date combinat din surse cu stiluri de adnotare diferite. Diferența dintre precizie ($94{,}3\%$) și sensibilitate ($90{,}2\%$) arată că modelul este ușor mai conservator: ratează unele arme, dar generează relativ puține detecții false. Acesta este un compromis dorit pentru a evita alarmele false într-un sistem de securitate.
 
-Acest comportament este susținut la inferență de o decizie de proiectare la nivelul modulului de rulare (\inlinecode{WeaponDetectionSystem}). Deși modelul produce candidați peste un prag de confidență permisiv ($0{,}3$), o detecție este reținută doar dacă trece de un filtru ulterior mai strict de confidență ($0{,}7$), iar alerta finală necesită confirmare temporală pe mai multe cadre consecutive (mecanism analog celui de la detecția de foc, detaliat în Secțiunea~\ref{subsubsec:confirmare_temporala}). Astfel, sensibilitatea brută a modelului este sacrificată intenționat în favoarea unei precizii operaționale mai mari, prioritară fiind reducerea falselor alarme. Aportul exemplelor negative (telefoane, portofele, carduri din datasetul SOHAS, lăsate intenționat fără adnotări) se reflectă tocmai în această precizie ridicată, modelul fiind forțat să ignore obiectele uzuale care pot fi confundate cu arme.
+Acest comportament este susținut la inferență de o decizie de proiectare la nivelul modulului de rulare (\inlinecode{WeaponDetectionSystem}). Deși modelul produce candidați peste un prag de confidență permisiv ($0{,}3$), o detecție este reținută doar dacă trece de un filtru ulterior mai strict de confidență ($0{,}7$), iar alerta finală necesită confirmare temporală pe mai multe cadre consecutive (mecanism analog celui de la detecția de foc, detaliat în Secțiunea~\ref{subsubsec:confirmare_temporala}). Astfel, sensibilitatea brută a modelului este sacrificată intenționat în favoarea unei precizii operaționale mai mari, prioritară fiind reducerea falselor alarme. Aportul exemplelor negative (telefoane, portofele, carduri din setul de date SOHAS, lăsate intenționat fără adnotări) se reflectă tocmai în această precizie ridicată, modelul fiind forțat să ignore obiectele uzuale care pot fi confundate cu arme.
 
-\section{Modulul de recunoaștere a acțiunilor umane (fine-tuning SlowFast)}
+\section{Modulul de recunoaștere a acțiunilor umane (ajustare fină SlowFast)}
 \label{sec:modul_actiuni}
 
 Cel mai complex modul de inteligență artificială al sistemului este cel de recu-noaștere a
@@ -626,13 +626,13 @@ operează pe un singur cadru, recunoașterea acțiunilor necesită modelarea dim
 fiind dată de mișcare.
 
 Acest modul reprezintă, alături de detectorul de arme, una dintre cele două componente
-antrenate în cadrul proiectului. Antrenarea (fine-tuning) a fost realizată în proiectul separat
+antrenate în cadrul proiectului. Antrenarea (ajustarea fină) a fost realizată în proiectul separat
 \inlinecode{security\_system}, iar modelul rezultat este consumat de aplicația principală ca un
 fișier checkpoint (\inlinecode{best\_model.pth}), încărcat la rulare de clasa
 \inlinecode{HumanActionRecognitionSystem} din \inlinecode{har\_system.py} (\textit{Thread~5}).
 Subcapitolele care urmează descriu alegerea arhitecturii, construcția setului de date (inclusiv
-crearea de la zero a unui dataset propriu pentru clasa \inlinecode{vandalism}), procesul de
-fine-tuning, parametrii și rezultatele, iar la final modul de integrare în aplicație.
+crearea de la zero a unui set de date propriu pentru clasa \inlinecode{vandalism}), procesul de
+ajustare fină, parametrii și rezultatele, iar la final modul de integrare în aplicație.
 
 \subsection{Justificarea alegerii SlowFast R50}
 \label{subsec:justificare_slowfast}
@@ -647,15 +647,15 @@ distingerea acțiunilor pe baza mișcării -- exact problema de față.
 
 Varianta R50 (cu backbone ResNet-50) oferă un compromis bun între capacitate și cost
 computațional, permițând inferența în timp real alături de celelalte modele. În plus, modelul este
-disponibil pre-antrenat pe datasetul Kinetics-400 (prin PyTorchVideo / PyTorch Hub), ceea ce
+disponibil pre-antrenat pe setul de date Kinetics-400 (prin PyTorchVideo / PyTorch Hub), ceea ce
 oferă un punct de pornire solid: reprezentările video generice învățate pe 400 de clase de acțiuni
-pot fi adaptate prin fine-tuning la cele trei clase ale problemei, cu un set de date mult mai mic
+pot fi adaptate prin ajustare fină la cele trei clase ale problemei, cu un set de date mult mai mic
 decât ar fi necesar pentru antrenarea de la zero.
 
 \subsection{Construcția setului de date}
 \label{subsec:constructie_dataset}
 
-Setul de date pentru fine-tuning a fost construit din trei surse, câte una pentru fiecare clasă.
+Setul de date pentru ajustarea fină a fost construit din trei surse, câte una pentru fiecare clasă.
 Structura este de tip folder-per-clasă (\inlinecode{data/train/<clasă>/} și
 \inlinecode{data/test/<clasă>/}), iar clasele sunt descoperite automat din numele folderelor de
 către \inlinecode{configs/config.py}, cu convenția ca eticheta \inlinecode{normal} să primească
@@ -665,7 +665,7 @@ către \inlinecode{configs/config.py}, cu convenția ca eticheta \inlinecode{nor
 \label{subsubsec:clasa_normal}
 
 Clasa \inlinecode{normal} conține videoclipuri de supraveghere cu activitate cotidiană, fără
-incidente, preluate din datasetul public \textbf{RWF-2000} (disponibil pe Kaggle). Aceste
+incidente, preluate din setul de date public \textbf{RWF-2000} (disponibil pe Kaggle). Aceste
 secvențe oferă modelului o referință pentru ceea ce înseamnă comportament obișnuit, esențială
 pentru a delimita clasele de interes (\inlinecode{fight}, \inlinecode{vandalism}) de fundalul
 normal.
@@ -674,17 +674,17 @@ normal.
 \label{subsubsec:clasa_fight}
 
 Clasa \inlinecode{fight} conține videoclipuri cu lupte și altercații fizice, preluate tot din
-datasetul \textbf{RWF-2000}, care include scene de confruntare fizică între persoane, capturate de
-camere de supraveghere. Folosirea aceluiași dataset pentru clasele \inlinecode{normal} și
+setul de date \textbf{RWF-2000}, care include scene de confruntare fizică între persoane, capturate de
+camere de supraveghere. Folosirea aceluiași set de date pentru clasele \inlinecode{normal} și
 \inlinecode{fight} asigură un stil vizual consistent (rezoluție, unghiuri, calitate a imaginii)
 între cele două, astfel încât modelul să învețe diferența de \textit{acțiune}, nu de domeniu vizual.
 
-\subsubsection{Clasa \textit{vandalism} -- dataset propriu}
+\subsubsection{Clasa \textit{vandalism} -- set de date propriu}
 \label{subsubsec:clasa_vandalism}
 
-\paragraph{Justificarea creării unui dataset propriu.}
+\paragraph{Justificarea creării unui set de date propriu.}
 \label{par:justificare_dataset}
-Spre deosebire de primele două clase, pentru \inlinecode{vandalism} nu există un dataset public
+Spre deosebire de primele două clase, pentru \inlinecode{vandalism} nu există un set de date public
 adecvat de videoclipuri de supraveghere. Din acest motiv, a fost necesară construirea unui set de
 date propriu, de la zero, printr-un proces în trei etape descris în continuare.
 
@@ -702,7 +702,7 @@ termeni asociați camerelor de supraveghere. În urma acestui proces au fost col
 Toate cele aproximativ 4.800 de videoclipuri au fost vizualizate și evaluate manual, pentru a
 selecta doar clipurile care conțin efectiv acte de vandalism filmate de camere de supraveghere,
 eliminându-le pe cele irelevante. În urma filtrării au rămas peste 600 de videoclipuri valide.
-Această etapă, deși laborioasă, este esențială pentru calitatea datasetului: garantează că modelul
+Această etapă, deși laborioasă, este esențială pentru calitatea setului de date: garantează că modelul
 învață din exemple reale și relevante.
 
 \paragraph{Etapa 3: Editare în OpenShot.}
@@ -730,7 +730,7 @@ Unitatea de antrenare este videoclipul integral, nu un fragment al acestuia. Fie
 
 În total, setul de date cuprinde \textbf{2538 de videoclipuri}, repartizate în \textbf{2097 de videoclipuri pentru antrenare} (\inlinecode{normal}: 829, \inlinecode{fight}: 771, \inlinecode{vandalism}: 497) și \textbf{441 de videoclipuri pentru validare} (\inlinecode{normal}: 169, \inlinecode{fight}: 155, \inlinecode{vandalism}: 117). Cifrele aferente setului de validare corespund coloanei \textit{Suport} din analiza per clasă (Tabelul~\ref{tab:per_clasa_actiuni}) și reprezintă numărul de videoclipuri pe care s-au calculat metricile finale. Pentru clasele \inlinecode{normal} și \inlinecode{fight} s-a păstrat împărțirea predefinită a setului original RWF-2000. Pentru clasa \inlinecode{vandalism} (care folosește setul de date propriu, cele 614 videoclipuri menționate anterior), fișierele au fost repartizate manual în cele două directoare, respectând aceeași regulă de separare la nivel de fișier.
 
-\subsection{Pregătirea modelului pentru fine-tuning}
+\subsection{Pregătirea modelului pentru ajustarea fină}
 \label{subsec:pregatire_finetuning}
 
 Pregătirea modelului pornește de la SlowFast R50 pre-antrenat pe Kinetics-400, al cărui cap de
@@ -751,7 +751,7 @@ modelul ar primi intrări incompatibile cu cele pe care a fost antrenat.
 \subsection{Parametrii de antrenare}
 \label{subsec:parametri_actiuni}
 
-Antrenarea, implementată în \inlinecode{train.py}, folosește o strategie de fine-tuning în
+Antrenarea, implementată în \inlinecode{train.py}, folosește o strategie de ajustare fină în
 \textit{două faze}, gândită pentru a adapta modelul la noile clase fără a distruge reprezentările
 pre-antrenate:
 
@@ -760,7 +760,7 @@ pre-antrenate:
     sunt înghețați (\inlinecode{requires\_grad=False}), antrenându-se \textit{doar} capul de
     clasificare nou. Astfel, capul aleator inițializat se stabilizează fără a perturba
     caracteristicile vizuale învățate pe Kinetics-400;
-    \item \textbf{Faza 2 -- fine-tuning complet}: backbone-ul este dezghețat și întregul model este
+    \item \textbf{Faza 2 -- ajustare fină completă}: backbone-ul este dezghețat și întregul model este
     antrenat, dar cu \textit{rate de învățare diferențiate} -- backbone-ul primește o rată de 10
     ori mai mică decât capul (\inlinecode{lr\_backbone\_factor=0.1}), pentru a-l ajusta fin fără a-l
     deteriora.
@@ -772,7 +772,7 @@ Alți parametri și tehnici folosite, conform \inlinecode{config.py} și \inline
     \item \textbf{Optimizator}: AdamW, rată de învățare $10^{-3}$, \inlinecode{weight\_decay}
     $= 10^{-4}$, cu o programare de tip \inlinecode{StepLR} (reducere de 10$\times$ la fiecare 10
     epoci);
-    \item \textbf{Funcția de pierdere}: \inlinecode{CrossEntropyLoss} cu \textit{label smoothing}
+    \item \textbf{Funcția de cost}: \inlinecode{CrossEntropyLoss} cu \textit{label smoothing}
     de $0{,}1$, pentru a reduce supraîncrederea modelului;
     \item \textbf{Dezechilibrul de clase}: deoarece numărul de clipuri diferă între categorii,
     dezechilibrul a fost tratat la nivelul \textit{eșantionării}, nu al funcției de pierdere,

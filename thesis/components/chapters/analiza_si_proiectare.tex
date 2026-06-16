@@ -326,7 +326,7 @@ Firul \texttt{CaptureThread} citește ciclic câte un cadru de la fiecare camer�
 
 \subsubsection{Firul 2 -- Recunoaștere facială și analiză demografică}
 
-Firul \texttt{FaceProcessingThread} consumă din \texttt{face\_processing\_queue}, rulează detecția fețelor cu InsightFace, calculează reprezentările vectoriale 512-d, le caută în indexul FAISS în memoria procesului și asociază fiecărei detecții vârsta, genul (din InsightFace) și emoția (din modelul Mini-Xception/FER). Toate aceste operații sunt încapsulate într-un singur fir pentru că au aceeași intrare (regiunea facială) și aceeași localitate de cache GPU; separarea recunoașterii faciale de demografie ar dubla detecția fețelor fără beneficiu real.
+Firul \texttt{FaceProcessingThread} consumă din \texttt{face\_processing\_queue}, rulează detecția fețelor cu InsightFace, calculează reprezentările vectoriale 512-d, le caută în indexul FAISS în memoria procesului și asociază fiecărei detecții vârsta și genul (din InsightFace), iar pentru fețele necunoscute și emoția (din modelul Mini-Xception/FER). Toate aceste operații sunt încapsulate într-un singur fir pentru că au aceeași intrare (regiunea facială) și aceeași localitate de cache GPU; separarea recunoașterii faciale de demografie ar dubla detecția fețelor fără beneficiu real.
 
 \subsubsection{Firul 3 -- Plăcuțe de înmatriculare}
 
