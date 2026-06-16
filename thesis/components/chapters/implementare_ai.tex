@@ -16,14 +16,14 @@ din fișierul \inlinecode{facial\_recognition\_system.py}. Rolul său este de a
 identifica, în fiecare cadru video, persoanele înregistrate anterior în baza de
 date și de a distinge între persoanele cunoscute (angajați) și cele necunoscute.
 Spre deosebire de pipeline-urile clasice de recunoaștere facială, care înlănțuie
-un detector de fețe, un model separat de extragere a embeddings-urilor și încă
+un detector de fețe, un model separat de extragere a vectorilor de caracteristici și încă
 unul pentru estimarea atributelor demografice, implementarea de față consolidează
 toate aceste sarcini într-o singură trecere prin pachetul de modele
 \textbfit{buffalo\_s} al framework-ului InsightFace, ale cărui fundamente
 teoretice au fost prezentate în secțiunea~\ref{sec:recunoastere_faciala}.
 
 Pipeline-ul intern al modulului are patru etape, descrise în subcapitolele care
-urmează: (1)~detecția fețelor și extragerea embeddings-urilor cu InsightFace,
+urmează: (1)~detecția fețelor și extragerea reprezentărilor vectoriale cu InsightFace,
 (2)~indexarea și căutarea vectorilor cu FAISS, (3)~strategia de stabilire a
 identității pe baza distanței și (4)~optimizarea prin omiterea analizei
 demografice pentru fețele deja recunoscute. La nivelul aplicației, modulul rulează
@@ -31,10 +31,10 @@ demografice pentru fețele deja recunoscute. La nivelul aplicației, modulul rul
 de tip \inlinecode{queue.Queue}, apelează metoda \inlinecode{process\_frame()} și
 publică rezultatele în coada de fuziune (a se vedea secțiunea~\ref{sec:fuziune}).
 
-\subsection{Detecția fețelor și extragerea embeddings-urilor}
+\subsection{Detecția fețelor și extragerea reprezentărilor vectoriale}
 \label{subsec:detectie_extragere}
 
-Detecția fețelor și extragerea descriptorilor numerici (embeddings) sunt realizate
+Detecția fețelor și extragerea descriptorilor numerici (vectori de caracteristici) sunt realizate
 de obiectul \inlinecode{FaceAnalysis} din InsightFace, inițializat cu pachetul de
 modele \inlinecode{buffalo\_s}. Acest pachet reunește trei submodele care, în
 abordarea tradițională, ar fi necesitat încărcarea și apelarea separată:
@@ -44,20 +44,20 @@ abordarea tradițională, ar fi necesitat încărcarea și apelarea separată:
     și cele cinci puncte caracteristice (landmark-uri) pentru fiecare față din cadru;
     \item \textbf{w600k\_mbf} -- rețeaua de recunoaștere, o variantă MobileFaceNet
     antrenată pe datasetul Glint360K cu funcția de pierdere ArcFace, care produce
-    embedding-ul facial de 512 dimensiuni;
+    vectorul de caracteristici facial de 512 dimensiuni;
     \item capul \textbf{genderage} -- care estimează vârsta și genul persoanei.
 \end{itemize}
 
 Alegerea variantei \inlinecode{buffalo\_s} (în locul, de exemplu, a variantei
 \inlinecode{buffalo\_sc}) este motivată tehnic: rețeaua de recunoaștere
-\inlinecode{w600k\_mbf} este identică în ambele pachete, astfel încât embedding-urile
+\inlinecode{w600k\_mbf} este identică în ambele pachete, astfel încât reprezentările vectoriale
 de 512 dimensiuni rămân compatibile, însă \inlinecode{buffalo\_s}  include modulul suplimentar \texttt{genderage}, indispensabil pentru analiza demografică
 (secțiunea~\ref{sec:analiza_demografica}). În lipsa acestui modul de predicție, estimările privind vârsta și genul ar fi indisponibile, sistemul returnând valoarea \texttt{None}.
 
 Pentru fiecare cadru, metoda \inlinecode{process\_frame()} apelează
 \inlinecode{self.face\_app.} \inlinecode{get(frame)}, care efectuează într-o singură trecere
 detecția tuturor fețelor și, pentru fiecare, calculează bounding box-ul,
-landmark-urile, embedding-ul L2-normalizat (\inlinecode{normed\_embedding}, vector
+landmark-urile, vectorul de caracteristici L2-normalizat (\inlinecode{normed\_embedding}, vector
 de 512 de elemente de tip \inlinecode{float32}) și estimările de vârstă și gen.
 Bounding box-ul de tip \inlinecode{[x1, y1, x2, y2]} returnat de InsightFace este
 convertit în formatul \inlinecode{(x, y, w, h)} și ancorat în limitele cadrului de
@@ -89,12 +89,12 @@ provoacă conflicte de context CUDA cu \inlinecode{onnxruntime} \inlinecode{-gpu
 fault la inițializare.
 
 \subsubsection{Înregistrarea persoanelor}
-Embedding-urile persoanelor cunoscute sunt generate în momentul înregistrării acestora în sistem. Metoda \inlinecode{register\_person()} primește o listă de imagini faciale și execută modelul InsightFace pe fiecare dintre ele. În situația în care sunt detectate mai multe fețe într-o imagine, sistemul o selectează pe cea cu aria maximă a casetei de încadrare (\emph{bounding box}), prin intermediul funcției \inlinecode{\_extract\_single\_face()}. Ulterior, este extras \emph{embedding}-ul de 512 dimensiuni, care va fi stocat atât în baza de date, cât și în indexul FAISS. Pentru încărcările de imagini efectuate prin interfața web, metoda \inlinecode{extract\_embedding\_} \inlinecode{from\_image()} acceptă exclusiv imaginile care conțin o singură față detectabilă, prevenind astfel riscul asocierii ambigue a unui \emph{embedding} cu o persoană.
+Reprezentările vectoriale ale persoanelor cunoscute sunt generate în momentul înregistrării acestora în sistem. Metoda \inlinecode{register\_person()} primește o listă de imagini faciale și execută modelul InsightFace pe fiecare dintre ele. În situația în care sunt detectate mai multe fețe într-o imagine, sistemul o selectează pe cea cu aria maximă a casetei de încadrare (\emph{bounding box}), prin intermediul funcției \inlinecode{\_extract\_single\_face()}. Ulterior, este extras \emph{vectorul de caracteristici} de 512 dimensiuni, care va fi stocat atât în baza de date, cât și în indexul FAISS. Pentru încărcările de imagini efectuate prin interfața web, metoda \inlinecode{extract\_embedding\_} \inlinecode{from\_image()} acceptă exclusiv imaginile care conțin o singură față detectabilă, prevenind astfel riscul asocierii ambigue a unui \emph{vector de caracteristici} cu o persoană.
 
 \subsection{Indexarea cu FAISS FlatL2}
 \label{subsec:indexare_faiss}
 
-Căutarea identității unei fețe presupune compararea embedding-ului ei cu toți
+Căutarea identității unei fețe presupune compararea vectorului său de caracteristici cu toți
 descriptorii persoanelor înregistrate. Pentru a face această operație eficientă,
 sistemul folosește biblioteca FAISS, încapsulată în clasa \inlinecode{FaissIndex}
 din fișierul \inlinecode{faiss\_index.py}. Tipul de index utilizat este
@@ -103,7 +103,7 @@ folosind distanța euclidiană L2 între vectorul de interogare și fiecare vect
 index. Spre deosebire de indecșii aproximativi (precum IVFFlat), căutarea exactă nu
 necesită o etapă de antrenare și garantează găsirea celui mai apropiat vecin; aceasta
 este alegerea potrivită pentru dimensiunea tipică a unei baze de angajați, unde numărul
-de embedding-uri este suficient de mic încât căutarea liniară să rămână instantanee.
+de vectori de caracteristici este suficient de mic încât căutarea liniară să rămână instantanee.
 
 \subsubsection{Maparea identităților}
 FAISS operează cu indici poziționali interni (0, 1, 2, \dots), nu cu identificatorii
@@ -111,10 +111,10 @@ persoanelor din baza de date. De aceea, clasa \inlinecode{FaissIndex} menține d
 dicționare de mapare: \inlinecode{id\_map}, care asociază fiecărui index FAISS un
 \inlinecode{person\_id}, și \inlinecode{reverse\_id\_map}, care leagă fiecare
 \inlinecode{person\_id} de lista de indici corespunzători (o persoană poate avea mai
-multe embedding-uri, câte unul pentru fiecare imagine înregistrată).
+multe reprezentări vectoriale, câte una pentru fiecare imagine înregistrată).
 
 \subsubsection{Persistența și reconstrucția indexului}
-Indexul FAISS este o structură de date alocată în memorie, în timp ce baza de date PostgreSQL constituie punctul central de stocare și referință pentru toți vectorii de \emph{embedding}. În tabelul \inlinecode{face\_embeddings}, fiecare \emph{embedding} este salvat în coloana \inlinecode{embedding} de tip \inlinecode{BYTEA}, fiind serializat cu ajutorul bibliotecii \inlinecode{pickle}. La pornirea sistemului, metoda \inlinecode{\_load\_embeddings\_from\_db()} preia toate datele prin \inlinecode{get\_all\_embeddings()} și reconstruiește complet indexul prin apelarea funcției \inlinecode{rebuild\_index()}. Această procedură de reconstrucție este declanșată automat ori de câte ori o persoană este înregistrată, modificată sau ștearsă, garantând astfel consistența strictă între stocarea persistentă și indexul volatil. 
+Indexul FAISS este o structură de date alocată în memorie, în timp ce baza de date PostgreSQL constituie punctul central de stocare și referință pentru toți vectorii de caracteristici. În tabelul \inlinecode{face\_embeddings}, fiecare \emph{vector de caracteristici} este salvat în coloana \inlinecode{embedding} de tip \inlinecode{BYTEA}, fiind serializat cu ajutorul bibliotecii \inlinecode{pickle}. La pornirea sistemului, metoda \inlinecode{\_load\_embeddings\_from\_db()} preia toate datele prin \inlinecode{get\_all\_embeddings()} și reconstruiește complet indexul prin apelarea funcției \inlinecode{rebuild\_index()}. Această procedură de reconstrucție este declanșată automat ori de câte ori o persoană este înregistrată, modificată sau ștearsă, garantând astfel consistența strictă între stocarea persistentă și indexul volatil. 
 
 \subsubsection{Siguranța accesului concurent}
 Întrucât firul de recunoaștere facială interoghează indexul în fiecare cadru, în
@@ -136,7 +136,7 @@ calibrare (activabilă prin variabila de mediu \inlinecode{FR\_DEBUG}), după ca
 manual pragul de decizie configurat.
 
 \subsubsection{De la distanța L2 la similaritatea cosinus}
-Deoarece embeddings-urile sunt L2-normalizate, între distanța euclidiană la pătrat și
+Deoarece vectorii de caracteristici sunt L2-normalizați, între distanța euclidiană la pătrat și
 similaritatea cosinus a doi vectori există relația exactă
 $L2^2 = 2 - 2\cos\theta$, echivalentă cu $\cos\theta = 1 - L2^2/2$. Această echivalență
 permite raportarea identității prin două mărimi interpretabile:
@@ -191,7 +191,7 @@ Extragerea atributelor se bazează pe două modele distincte: vârsta și genul 
 
 Vârsta și genul nu necesită un model dedicat: ambele sunt generate de modulul
 \inlinecode{genderage} al pachetului \inlinecode{buffalo\_s}, în aceeași trecere
-InsightFace care furnizează bounding box-ul, landmark-urile și embedding-ul. Pentru
+InsightFace care furnizează bounding box-ul, landmark-urile și vectorul de caracteristici. Pentru
 fiecare obiect \inlinecode{Face} returnat de detector, atributele sunt extrase astfel:
 
 \begin{itemize}
