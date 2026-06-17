@@ -1,0 +1,72 @@
+@startuml overview_ai
+' Privire de ansamblu (high-level) - fluxul de procesare AI
+' (Cap. 5: sec:justificare_modele)
+
+skinparam shadowing false
+skinparam backgroundColor transparent
+skinparam defaultFontName Serif
+skinparam defaultFontSize 13
+skinparam roundCorner 8
+skinparam ArrowColor #555555
+skinparam ArrowFontColor #333333
+
+skinparam rectangle {
+  BorderColor #333333
+  BackgroundColor #EAF1FB
+  FontColor #111111
+}
+skinparam package {
+  BorderColor #777777
+  FontStyle bold
+  BackgroundColor #FFF3E0
+}
+skinparam database {
+  BorderColor #2E7D32
+  BackgroundColor #E8F5E9
+  FontColor #111111
+}
+
+' ===== Intrare =====
+rectangle "**Flux video**\n<size:10>camere și fișiere video</size>" as Video #E0E0E0
+
+rectangle "**Captură cadre**\n<size:10>fiecare cadru este transmis, în paralel, către module</size>" as Capture #D7E9FF
+
+' ===== Module AI (subtitluri uniforme: modelul de bază) =====
+package "Module de inteligență artificială  (execuție concurentă, același GPU)" as Modules {
+  rectangle "**Recunoaștere facială**\n**și demografie**\n<size:10>InsightFace</size>" as Face #FFFFFF
+  rectangle "**Recunoaștere plăcuțe**\n**de înmatriculare**\n<size:10>YOLOv8 + EasyOCR</size>" as Plate #FFFFFF
+  rectangle "**Detecție**\n**foc și fum**\n<size:10>YOLO</size>" as Fire #FFFFFF
+  rectangle "**Recunoaștere**\n**acțiuni umane**\n<size:10>SlowFast-R50</size>" as HAR #FFFFFF
+  rectangle "**Detecție**\n**arme**\n<size:10>YOLOv8m</size>" as Weapon #FFFFFF
+}
+
+' ===== Fuziune și ieșiri =====
+rectangle "**Fuziune rezultate**\n<size:10>recombină detecțiile pe fiecare cadru</size>" as Fusion #D7E9FF
+
+rectangle "**Generare alarme și jurnale**\n<size:10>evenimente persistente</size>" as Alarms #FCE4EC
+
+rectangle "**Difuzare către operatori**\n<size:10>flux video adnotat (WebSocket)</size>" as WS #D7E9FF
+
+database "Bază de date" as DB
+rectangle "**Operatori**\n<size:10>interfață web</size>" as Ops #E0E0E0
+
+' ===== Flux de date =====
+Video --> Capture
+Capture --> Face
+Capture --> Plate
+Capture --> Fire
+Capture --> HAR
+Capture --> Weapon
+
+Face --> Fusion
+Plate --> Fusion
+Fire --> Fusion
+HAR --> Fusion
+Weapon --> Fusion
+
+Fusion --> Alarms
+Fusion --> WS
+Alarms --> DB
+WS --> Ops
+
+@enduml

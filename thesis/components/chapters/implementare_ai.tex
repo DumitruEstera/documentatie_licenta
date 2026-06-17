@@ -12,6 +12,15 @@
 
 Acest capitol descrie cele șase module de inteligență artificială ale sistemului -- recunoașterea facială, analiza demografică și emoțională, recunoașterea plăcuțelor de înmatriculare, detecția focului și a fumului, detecția armelor și recunoașterea acțiunilor umane --, precum și fuziunea rezultatelor acestora la nivel de cadru. Înainte de a detalia fiecare modul în parte, această secțiune oferă o imagine de ansamblu a sarcinilor de inteligență artificială rezolvate și justifică, pentru fiecare dintre ele, modelul (sau biblioteca) ales în raport cu alternativele relevante din literatură și din practica curentă.
 
+Figura~\ref{fig:overview_ai} oferă o imagine de ansamblu a fluxului de procesare, înainte de descrierea individuală a modulelor. Fiecare cadru capturat din fluxul video este transmis, în paralel, către cele cinci module de inteligență artificială, care rulează \emph{concurent} pe aceeași placă grafică; rezultatele lor sunt apoi recombinate într-o etapă de fuziune, care generează alarmele și jurnalele și difuzează fluxul video adnotat către operatori. Mecanismele care fac posibilă această arhitectură (sincronizarea rezultatelor, generarea și deduplicarea alarmelor, difuzarea către clienți) sunt tratate în detaliu în Secțiunea~\ref{sec:fuziune}, iar arhitectura multi-threaded completă a fost prezentată în Capitolul~\ref{ch:analiza_proiectare} (Figura~\ref{fig:pipeline}).
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth]{overview_ai.pdf}
+	\caption{Imagine de ansamblu a fluxului de procesare al modulelor de inteligență artificială. Cadrele capturate din fluxul video sunt transmise, în paralel, către cele cinci module de inteligență artificială; sub fiecare modul este indicat modelul (sau biblioteca) pe care se bazează. Rezultatele converg în etapa de fuziune, care le recombină pe fiecare cadru, generează alarmele și jurnalele și difuzează cadrul adnotat către operatori. Pentru claritate, diagrama rămâne la nivel de ansamblu; detalierea firelor de execuție, a cozilor și a mecanismului de fuziune se găsește în Figura~\ref{fig:pipeline} și în Secțiunea~\ref{sec:fuziune}.}
+	\label{fig:overview_ai}
+\end{figure}
+
 Selecția fiecărui model nu a urmărit exclusiv acuratețea brută pe seturi de date de referință, ci a fost ghidată de un set de patru criterii corelate cu specificul aplicației (un sistem de supraveghere care procesează un flux video în timp real):
 
 \begin{enumerate}
