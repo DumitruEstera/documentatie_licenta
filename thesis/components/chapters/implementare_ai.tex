@@ -126,6 +126,15 @@ demografice pentru fețele deja recunoscute. La nivelul aplicației, modulul rul
 de tip \inlinecode{queue.Queue}, apelează metoda \inlinecode{process\_frame()} și
 publică rezultatele în coada de fuziune (a se vedea secțiunea~\ref{sec:fuziune}).
 
+Figura~\ref{fig:facial_flow} sintetizează întregul flux de procesare al modulului, de la cadrul de intrare până la rezultatul transmis firului de fuziune, reunind cele patru etape enumerate mai sus împreună cu analiza demografică și emoțională (secțiunea~\ref{sec:analiza_demografica}). Se remarcă punctul central de decizie -- pragul dublu aplicat distanței și nivelului de încredere -- care determină tratarea diferențiată a fețelor cunoscute față de cele necunoscute. Subcapitolele care urmează detaliază, pe rând, fiecare etapă a acestui flux.
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.92\textwidth]{facial_flow.pdf}
+	\caption{Fluxul de procesare al modulului de recunoaștere facială. Fiecare cadru este analizat de InsightFace într-o singură trecere, care produce simultan, pentru toate fețele, caseta de încadrare, embedding-ul de 512 dimensiuni și estimările demografice. Pentru fiecare față, embedding-ul este căutat în indexul FAISS, iar identitatea se stabilește pe baza unui prag dublu (distanță $L_2 < 1{,}0$ \emph{și} încredere $> 0{,}4$). Fețele cunoscute (ramura verde) sunt jurnalizate ca evenimente de acces, iar atributele demografice sunt omise deliberat; fețele necunoscute (ramura portocalie) sunt caracterizate demografic, iar emoția este clasificată suplimentar de rețeaua Mini-Xception pe CPU. Indexul FAISS este reconstruit determinist din baza de date.}
+	\label{fig:facial_flow}
+\end{figure}
+
 \subsection{Detecția fețelor și extragerea reprezentărilor vectoriale}
 \label{subsec:detectie_extragere}
 
@@ -364,11 +373,6 @@ identificată de pipeline-ul principal.
 
 Predicția propriu-zisă, implementată în metoda \inlinecode{\_classify\_emotion()}, constă într-o etapă de propagare directă (\emph{forward pass}) prin rețea, urmată de aplicarea operației \inlinecode{argmax} pe cele șapte probabilități furnizate de funcția \emph{softmax}. Rezultatul returnat este un tuplu format din eticheta emoției și scorul de încredere asociat. Dimensiunea de intrare necesară modelului este extrasă automat din proprietatea \inlinecode{input\_shape}, asigurând astfel adaptarea dinamică a etapei de preprocesare (detaliată în continuare) la arhitectura specifică rețelei.
 
-% [DIAGRAMĂ SUGERATĂ] Aici s-ar potrivi o diagramă a fluxului analizei pe o față
-% necunoscută: cadru → InsightFace (bbox + landmarks + embedding + vârstă/gen) →
-% [dacă față necunoscută] crop bbox → preprocesare → Mini-Xception → emoție.
-% Ar evidenția cele două modele (genderage vs Mini-Xception) și ramificarea
-% condiționată cunoscut/necunoscut.
 
 \subsection{Preprocesarea crop-ului facial}
 \label{subsec:preprocesare_crop}
@@ -414,11 +418,14 @@ execuție dedicat (\textit{Thread~3}).
 
 \emph{Pipeline}-ul combină un detector de obiecte (YOLOv8) cu un motor de recu-noaștere optică a caracterelor (EasyOCR), între care se interpun mai mulți pași de preprocesare a imaginii și, ulterior, o etapă de stabilizare temporală a rezultatului. O provocare majoră, care a influențat semnificativ implementarea, este faptul că plăcuțele apar în cadru la rezoluții reduse (tipic 116--151~px lățime), insuficiente pentru o recunoaștere OCR fiabilă. Din acest motiv, \emph{pipeline}-ul include un pas explicit de mărire a imaginii (\emph{up-scaling}) și o etapă avansată de filtrare și accentuare a detaliilor. Cele opt subcapitole care urmează descriu, în ordinea execuției, etapele acestui flux de prelucrare.
 
-% [DIAGRAMĂ SUGERATĂ] O diagramă de tip pipeline ar ilustra bine întregul flux:
-% cadru → YOLOv8 (detecție + bbox) → expandare bbox (padding 0.20) → up-scaling
-% (≥250 px) → preprocesare (grayscale/bilateral/CLAHE/unsharp) → EasyOCR →
-% [fallback pe crop color dacă conf<0.4] → validare format RO → PlateTracker
-% (IoU + votare temporală) → căutare în BD + decizie autorizare.
+Figura~\ref{fig:plate_flow} ilustrează întregul flux de prelucrare, de la detecția plăcuței până la decizia de autorizare, evidențiind cei patru pași de preprocesare a imaginii și cele patru puncte de decizie ale modulului: declanșarea condiționată a măririi imaginii, mecanismul de \emph{fallback} pe decupajul color, validarea formatului și votarea temporală, respectiv verificarea autorizării. Subcapitolele care urmează detaliază, în ordinea execuției, fiecare etapă a acestui flux.
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[height=0.9\textheight]{plate_flow.pdf}
+	\caption{Fluxul de procesare al modulului de recunoaștere a plăcuțelor. Fiecare plăcuță detectată de YOLOv8 este decupată cu o margine de context, mărită dacă este prea mică și supusă unui lanț de patru operații de preprocesare. Doar după consensul pe minimum trei cadre se interoghează baza de date și se decide autorizarea (casetă verde) sau respingerea (casetă roșie).}
+	\label{fig:plate_flow}
+\end{figure}
 
 \subsection{Detecția plăcuțelor cu YOLOv8}
 \label{subsec:detectie_placute}

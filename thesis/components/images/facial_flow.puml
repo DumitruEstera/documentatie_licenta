@@ -1,0 +1,73 @@
+@startuml facial_flow
+' Fluxul modulului de recunoaștere facială + analiză demografică/emoțională
+' (Cap. 5: sec:modul_facial, sec:analiza_demografica)
+
+skinparam shadowing false
+skinparam backgroundColor transparent
+skinparam defaultFontName Serif
+skinparam defaultFontSize 13
+skinparam ArrowColor #555555
+skinparam ArrowFontColor #333333
+
+skinparam activity {
+  BorderColor #333333
+  BackgroundColor #EAF1FB
+  FontColor #111111
+  DiamondBorderColor #5A6B8C
+  DiamondBackgroundColor #FFF3E0
+  DiamondFontColor #111111
+  StartColor #5A6B8C
+  EndColor #5A6B8C
+  BarColor #5A6B8C
+}
+
+skinparam note {
+  BorderColor #B0792C
+  BackgroundColor #FFF3E0
+  FontColor #111111
+  FontSize 11
+}
+
+start
+:**Cadru video**;
+
+:**InsightFace** (pachet ""buffalo_s"")\no singură trecere — ""face_app.get(frame)"";
+note right
+  Pentru **fiecare față** detectată produce
+  simultan, într-o singură inferență pe GPU:
+  • bounding box + 5 landmark-uri
+  • embedding facial 512-d (L2-normalizat)
+  • vârstă și gen (modulul ""genderage"")
+end note
+
+partition "pentru fiecare față detectată" {
+
+  :**Căutare în indexul FAISS** (""IndexFlatL2"", k = 1)\ncel mai apropiat vecin → distanță L2;
+  note right
+    Indexul este reconstruit din baza de date
+    (PostgreSQL) la pornire și la fiecare
+    înregistrare / modificare / ștergere.
+  end note
+
+  if (distanță L2 < prag (1,0)\n**și** confidence > 0,4 ?) then (da — față cunoscută)
+
+    #E8F5E9:Conversie distanță L2 → similaritate cosinus\nconfidence = 1 − L2² / 2;
+    #E8F5E9:Identitatea persoanei din baza de date\n""get_person_by_id()"";
+    #E8F5E9:Înregistrare eveniment de acces\n""log_access()"" → bază de date;
+    #E8F5E9:Chenar **verde** + nume (confidence);
+    #E8F5E9:Vârstă / gen / emoție = ""None""\n(omise deliberat — optimizare);
+
+  else (nu — față necunoscută)
+
+    #FFF3E0:Se expun vârsta și genul\n(deja calculate de InsightFace);
+    #FFF3E0:Decupare bbox → preprocesare\n(grayscale, redimensionare, normalizare [−1, 1]);
+    #FFF3E0:**Mini-Xception** (pe CPU)\nclasificare emoție (softmax → argmax);
+    #FFF3E0:Chenar **portocaliu** ""Unknown""\n+ vârstă / gen / emoție;
+
+  endif
+}
+
+:Rezultatele tuturor fețelor\nsunt transmise firului de fuziune;
+stop
+
+@enduml

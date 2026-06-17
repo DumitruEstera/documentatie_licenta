@@ -1,0 +1,85 @@
+@startuml plate_flow
+' Fluxul modulului de recunoaștere a plăcuțelor de înmatriculare (ANPR)
+' (Cap. 5: sec:modul_placute)
+
+skinparam shadowing false
+skinparam backgroundColor transparent
+skinparam defaultFontName Serif
+skinparam defaultFontSize 13
+skinparam ArrowColor #555555
+skinparam ArrowFontColor #333333
+
+skinparam activity {
+  BorderColor #333333
+  BackgroundColor #EAF1FB
+  FontColor #111111
+  DiamondBorderColor #5A6B8C
+  DiamondBackgroundColor #FFF3E0
+  DiamondFontColor #111111
+  StartColor #5A6B8C
+  EndColor #5A6B8C
+  BarColor #5A6B8C
+}
+
+skinparam note {
+  BorderColor #B0792C
+  BackgroundColor #FFF3E0
+  FontColor #111111
+  FontSize 11
+}
+
+start
+:**Cadru video**;
+
+:**Detecție plăcuțe — YOLOv8**\nimgsz = 640, încredere ≥ 0,25\n→ casete de încadrare candidate;
+
+partition "pentru fiecare plăcuță detectată" {
+
+  :**Expandare casetă** cu 20%\n(include marginile plăcuței + context vizual);
+
+  if (lățime < 250 px ?) then (da)
+    :**Up-scaling** bicubic (""INTER_CUBIC"")\nfactor = 250 / lățime, limitat la ×3;
+  else (nu — dimensiune suficientă)
+  endif
+
+  :**1. Tonuri de gri**;
+  :**2. Filtru bilateral**\nreduce zgomotul, păstrează muchiile;
+  :**3. CLAHE**\negalizare locală a contrastului (umbre, iluminare);
+  :**4. Unsharp mask**\naccentuează muchiile caracterelor;
+  note right
+    Preprocesare **fără binarizare**:
+    modelul CRNN din EasyOCR oferă
+    rezultate mai bune pe imagini în
+    tonuri de gri continue.
+  end note
+
+  :**EasyOCR** pe imaginea preprocesată\nallowlist A–Z / 0–9 → text + încredere;
+
+  if (text gol sau încredere < 0,4 ?) then (da — fallback)
+    :**Re-OCR pe decupajul color** (nepreprocesat);
+    :Se păstrează citirea cu încrederea mai mare;
+  else (nu)
+  endif
+
+  :**Asociere cu o traiectorie** — ""PlateTracker""\nIoU ≥ 0,3 cu un track existent, altfel track nou;
+
+  if (citire validă:\nnevidă, încredere ≥ 0,4 și format RO ?) then (da)
+    :Adaugă citirea în istoric\n(ultimele 10 citiri);
+  else (nu — citire respinsă)
+  endif
+
+  if (≥ 3 citiri valide ȘI\nvot majoritar ≥ 3 ?) then (da — rezultat stabilizat)
+    :**Căutare în baza de date**\n""lookup_owner_by_plate()"";
+    if (proprietar înregistrat\nși autorizat ?) then (da)
+      #E8F5E9:Casetă **verde**\nvehicul autorizat;
+    else (nu)
+      #FDE0E0:Casetă **roșie**\nUNKNOWN / vehicul neautorizat;
+    endif
+  else (nu — încă în evaluare)
+  endif
+}
+
+:Rezultatele sunt transmise\nfirului de fuziune;
+stop
+
+@enduml
