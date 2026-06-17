@@ -106,6 +106,10 @@
 \renewcommand{\listingscaption}{Listing}
 \renewcommand{\listoflistingscaption}{Listă de Listinguri}
 
+% Spatiere verticala naturala: nu intinde paragrafele ca sa umple pagina cand un
+% listing/tabel este impins pe pagina urmatoare. Golul ramane la finalul paginii.
+\raggedbottom
+
 % Custom abbreviation item
 \newenvironment{abbreviations}{\begin{list}{}{\renewcommand{\makelabel}{\abbrlabel}}}{\end{list}}
 \newcommand{\abbrlabel}[1]{\makebox[3cm][l]{\textbf{#1}\ \dotfill}}

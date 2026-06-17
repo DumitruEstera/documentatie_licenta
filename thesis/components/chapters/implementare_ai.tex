@@ -7,6 +7,92 @@
 \chapter{Implementarea Modulelor de Inteligență Artificială}
 \label{ch:implementare_ai}
 
+\section{Privire de ansamblu și justificarea alegerii modelelor}
+\label{sec:justificare_modele}
+
+Acest capitol descrie cele șase module de inteligență artificială ale sistemului -- recunoașterea facială, analiza demografică și emoțională, recunoașterea plăcuțelor de înmatriculare, detecția focului și a fumului, detecția armelor și recunoașterea acțiunilor umane --, precum și fuziunea rezultatelor acestora la nivel de cadru. Înainte de a detalia fiecare modul în parte, această secțiune oferă o imagine de ansamblu a sarcinilor de inteligență artificială rezolvate și justifică, pentru fiecare dintre ele, modelul (sau biblioteca) ales în raport cu alternativele relevante din literatură și din practica curentă.
+
+Selecția fiecărui model nu a urmărit exclusiv acuratețea brută pe seturi de date de referință, ci a fost ghidată de un set de patru criterii corelate cu specificul aplicației (un sistem de supraveghere care procesează un flux video în timp real):
+
+\begin{enumerate}
+	\item \textbf{Inferență în timp real în regim concurent} -- toate modelele rulează simultan, pe fire de execuție separate, utilizând \textit{aceeași} placă grafică (a se vedea Secțiunea~\ref{sec:fuziune}); un model lent ar deveni factorul limitativ pentru întregul flux de procesare;
+	\item \textbf{Robustețe în condiții reale de supraveghere} -- rezoluții reduse, iluminare neuniformă, unghiuri oblice și ocluzii parțiale;
+	\item \textbf{Disponibilitatea unor ponderi pre-antrenate mature} -- care reduc sau elimină costul de antrenare și oferă un punct de pornire solid pentru optimizarea suplimentară (\textit{fine-tuning}), acolo unde aceasta a fost necesară;
+	\item \textbf{Ușurința integrării} în arhitectura Python concurentă a aplicației (compatibilitate cu ecosistemele PyTorch / ONNX Runtime, API stabil, întreținere activă).
+\end{enumerate}
+
+Tabelul~\ref{tab:justificare_modele} sintetizează, pentru fiecare sarcină de inteligență artificială, alternativele luate în considerare, modelul ales și argumentele principale care au stat la baza deciziei. Detaliile de implementare sunt prezentate în secțiunile următoare ale prezentului capitol.
+
+{\footnotesize
+	\setlength{\LTleft}{0pt}
+	\setlength{\LTright}{0pt}
+	\renewcommand{\arraystretch}{1.25}
+	\begin{xltabular}{\textwidth}{@{}>{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}p{2.9cm} >{\raggedright\arraybackslash}p{2.2cm} X@{}}
+		\caption{Justificarea alegerii modelelor de inteligență artificială, pe sarcini.}
+		\label{tab:justificare_modele}\\
+		\hline
+		\textbf{Sarcină AI} & \textbf{Alternative considerate} & \textbf{Model ales} & \textbf{Justificarea alegerii} \\
+		\hline
+		\endfirsthead
+		\multicolumn{4}{l}{{\footnotesize\itshape \dots\ continuare a Tabelului~\ref{tab:justificare_modele}}}\\
+		\hline
+		\textbf{Sarcină AI} & \textbf{Alternative considerate} & \textbf{Model ales} & \textbf{Justificarea alegerii} \\
+		\hline
+		\endhead
+		\hline
+		\multicolumn{4}{r}{{\footnotesize\itshape continuă pe pagina următoare\dots}}\\
+		\endfoot
+		\hline
+		\endlastfoot
+		Detecția și recunoașterea facială
+		& FaceNet, Dlib (ResNet), DeepFace, ArcFace de sine stătător
+		& InsightFace (\inlinecode{buffalo\_s})
+		& Vectori de trăsături (\textit{embeddings}) de 512 dimensiuni, normalizați L2, antrenați utilizând funcția de cost ArcFace pe setul Glint360K, robuști la variații de postură și iluminare; detecția, recunoașterea și datele demografice se obțin într-o singură etapă de procesare; execuție eficientă pe GPU prin ONNX Runtime; bibliotecă întreținută activ. \\
+		\hline
+		Estimarea vârstei și a genului
+		& Modele dedicate (DEX, FairFace), clasificatoare Caffe age/gender
+		& InsightFace \inlinecode{genderage}
+		& Modul inclus deja în pachetul \inlinecode{buffalo\_s}, ceea ce elimină costul suplimentar de inferență (rezultatele fiind extrase în aceeași iterație cu recunoașterea facială); previne încărcarea în memorie a unui model adițional. \\
+		\hline
+		Recunoașterea emoțiilor
+		& DeepFace, VGG-Face, ResMaskNet (AffectNet)
+		& Mini-Xception (pachetul \inlinecode{fer})
+		& Rețea convoluțională compactă, cu latență neglijabilă la execuția pe CPU, eliberând astfel resursele GPU pentru modelele cu cerințe computaționale ridicate; pachet matur, antrenat pe setul standard FER-2013; se aplică direct pe zona facială decupată furnizată de InsightFace. \\
+		\hline
+		Detecția obiectelor (plăcuțe, foc/fum, arme)
+		& Faster R-CNN, SSD, RetinaNet, DETR, EfficientDet
+		& YOLOv8 / YOLOv10
+		& Detectoare într-o singură etapă (\textit{single-stage}) capabile de inferență în timp real, aspect esențial pentru rularea concurentă a mai multor modele; ecosistem Ultralytics matur, cu posibilități facile de optimizare suplimentară (\textit{fine-tuning}) și ponderi pre-antrenate disponibile; precizie competitivă în raport cu detectoarele \textit{two-stage}. \\
+		\hline
+		OCR pe plăcuțe de înmatriculare
+		& Tesseract, PaddleOCR, Keras-OCR, TrOCR
+		& EasyOCR (CRAFT + CRNN)
+		& Performanță superioară pe imagini degradate sau cu rezoluție redusă (cazul tipic al plăcuțelor în cadru, situație în care depășește net performanțele Tesseract); model bazat pe învățare profundă (CRNN) care operează pe imagini în tonuri de gri; dispune de suport GPU și permite definirea unei liste de permisiuni (\inlinecode{allowlist}) pentru restrângerea alfabetului. \\
+		\hline
+		Recunoașterea acțiunilor umane
+		& I3D, C3D, X3D, MoViNet, TimeSformer / VideoMAE
+		& SlowFast R50
+		& Arhitectură matură care separă explicit ramura spațială (\textit{Slow}) de ramura temporală (\textit{Fast}), fiind optimă pentru distingerea acțiunilor pe baza mișcării; beneficiază de ponderi pre-antrenate pe setul Kinetics-400 prin intermediul PyTorchVideo; varianta R50 oferă un echilibru solid între capacitatea de predicție și costul computațional (inferență în timp real), evitând complexitatea pătratică și necesitatea pre-antrenării masive specifice modelelor bazate pe arhitecturi Transformer. \\
+		\hline
+		Căutarea vectorială (similaritate)
+		& Brute-force NumPy, Annoy, HNSWlib, ScaNN, pgvector
+		& FAISS (\inlinecode{IndexFlatL2})
+		& Căutare exactă, care garantează identificarea celui mai apropiat vecin și elimină etapa antrenării indecșilor pentru căutări aproximative; operațiunea rămâne instantanee pentru dimensiunea tipică a unei baze de date de angajați; bibliotecă matură (susținută de Meta), cu integrare directă pentru vectori de trăsături de 512 dimensiuni. \\
+		\hline
+	\end{xltabular}
+	\par}
+	
+	
+Se remarcă faptul că majoritatea modulelor reutilizează modele pre-antrenate în
+forma lor originală (InsightFace, EasyOCR, detectoarele YOLO pentru plăcuțe și
+foc/fum, Mini-Xception), două componente fiind ajustate fin în cadrul proiectului
+pe seturi de date construite special: detectorul de arme (YOLOv8m,
+Secțiunea~\ref{sec:modul_arme}) și recunoașterea acțiunilor (SlowFast R50,
+Secțiunea~\ref{sec:modul_actiuni}). Această strategie mixtă -- modele de-a gata
+acolo unde există soluții robuste, ajustare fină acolo unde nu există -- reflectă
+exact criteriile de selecție enumerate mai sus: minimizarea costului de dezvoltare
+fără a sacrifica robustețea în scenariile specifice de supraveghere.
+
 \section{Modulul de recunoaștere facială}
 \label{sec:modul_facial}
 
