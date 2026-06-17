@@ -1064,5 +1064,54 @@ Filtrarea elementelor de meniu se face în client (\texttt{allNavItems.filter(it
 
 \paragraph*{Layout responsive.} Stilizarea cu Tailwind folosește clase responsive (\texttt{sm:}, \texttt{md:}, \texttt{lg:}, \texttt{grid-cols-*}) în toate componentele majore, astfel încât interfața să fie utilizabilă atât pe stația fixă a dispecerului, cât și pe dispozitive mobile pentru supraveghere de la distanță (cerința NF8).
 
+\section{Limitări ale proiectării}
+\label{sec:limitari_proiectare}
+
+Deciziile de proiectare prezentate în acest capitol au fost luate în raport cu un scenariu țintă precis -- un sistem de supraveghere inteligent pe un singur nod cu GPU dedicat, care deservește un număr moderat de camere și de operatori (\S\ref{subsec:diagrama_deployment}). Multe dintre alegerile arhitecturale optime pentru acest scenariu se transformă însă în constrângeri atunci când contextul de utilizare se schimbă. Această secțiune adună, în mod onest și sistematic, limitările intrinseci ale proiectării -- nu defecte de implementare, ci consecințe inevitabile ale compromisurilor asumate. Fiecare limitare este pusă în relație cu decizia de proiectare care o generează, întrucât majoritatea acestora reprezintă fața nefavorabilă a unui avantaj exploatat în altă parte.
+
+\subsection{Limitări arhitecturale și de scalabilitate}
+
+\begin{description}
+	\item[Arhitectura monolitică, mono-nod, nu este scalabilă pe orizontală.] Toate cele cinci detectoare, serverul FastAPI și indexul FAISS rulează într-un \emph{singur proces}, pe un \emph{singur nod} cu un \emph{singur GPU} (\S\ref{subsec:diagrama_deployment}). Această alegere este justificată pentru scenariul țintă -- partajarea modelelor în aceeași memorie GPU, cost zero de serializare, desfășurare (\textit{deployment}) simplificată (\S\ref{subsec:justificare_paralel}) --, dar fixează un plafon: scalarea este posibilă doar \emph{vertical} (un GPU mai puternic), nu \emph{orizontal} (distribuirea camerelor pe mai multe noduri). La un număr mare de camere, cele cinci modele intră în competiție pentru aceeași placă, iar latențele sub sarcină completă depășesc valorile măsurate izolat în Tabelul~\ref{tab:latente_inferenta}, care constituie deci un \emph{plafon optimist}. Cerința NF2 garantează extensia \emph{structurală} (replicarea firelor de captură), nu și menținerea performanței la scară.
+	
+	\item[Punct unic de eșec, fără redundanță.] Din aceeași opțiune mono-nod decurge absența oricărui mecanism de \emph{înaltă disponibilitate}: căderea nodului server oprește întregul sistem de supraveghere, iar în varianta implicită baza de date PostgreSQL coexistă pe același echipament gazdă (\S\ref{subsec:client_server}). Nu există mecanisme de preluare a sarcinilor în caz de defecțiune (\textit{failover}), replicare sau redundanță activă. Acest compromis este acceptabil pentru o implementare demonstrativă sau de tip pilot, dar reprezintă o limitare pentru un sistem de securitate critic, unde tocmai indisponibilitatea momentului supravegherii este inacceptabilă.
+	
+	\item[Transportul video prin WebSocket consumă lățime de bandă.] Cadrele sunt redimensionate la maximum 800~px, codificate JPEG la calitate 75 și apoi \textbf{Base64} (\S\ref{sec:proiectare_websocket}), o codificare care adaugă un surplus de aproximativ 33\% peste dimensiunea binară. În plus, modelul de difuzare este de tip \emph{unu-la-mulți}, cu o copie a cadrului trimisă în coada fiecărui client (\S\ref{subsec:fire_executie}), astfel încât traficul de rețea crește liniar cu numărul de operatori conectați. Nu se folosește un codec video cu compresie inter-cadru (de tip H.264/H.265 sau WebRTC). Alegerea privilegiază simplitatea -- un browser poate decoda și afișa trivial un fișier JPEG Base64, fără o bibliotecă suplimentară --, în detrimentul eficienței la nivel de rețea.
+	
+\end{description}
+
+\subsection{Limitări de performanță și de procesare}
+
+\begin{description}
+	\item[Recunoașterea facială domină calea critică de latență.] Cu o mediană de $\sim$83~ms și o percentilă 95 de $\sim$161~ms (Tabelul~\ref{tab:latente_inferenta}), recunoașterea facială cu analiză demografică este cel mai lent detector -- de peste douăzeci de ori mai costisitor din punct de vedere computațional decât detecția plăcuțelor -- și se află pe calea critică a cerinței NF1 (buget de 100~ms per cadru). Latența acesteia crește odată cu numărul de fețe simultane din imagine și sub competiția pentru resursele GPU, putând depăși bugetul țintă. Mecanismul bazat pe \emph{cel mai recent cadru disponibil} (\S\ref{subsec:sincronizare}) maschează acest cost în interfață -- fluxul rămâne fluid la rata camerei --, însă rata reală de actualizare a rezultatelor faciale rămâne limitată la aproximativ 12 actualizări pe secundă, indiferent de fluiditatea afișării.
+	
+	\item[Dependența de un GPU CUDA.] Atingerea latențelor țintă presupune ex-istența unui GPU compatibil CUDA cu cel puțin 8~GB VRAM (\S\ref{subsec:diagrama_deployment}). În absența unui furnizor hardware CUDA, biblioteca \texttt{onnxruntime} comută automat pe \texttt{CPUExecutionProvider}, iar sistemul rămâne \emph{funcțional, dar nu în timp real}, latențele crescând semnificativ (cerința NF9). Procesarea pe CPU reprezintă astfel o stare de funcționare degradată, nu o alternativă viabilă pentru exploatare, ceea ce restrânge gama de hardware pe care sistemul poate fi efectiv instalat.
+	
+	\item[Pierderea de cadre este asumată prin proiectare.] Pentru a menține o la-tență minimă, cozile au o capacitate redusă (\texttt{maxsize=10}), iar politicile de tratare a saturării \emph{ignoră} cadrele la intrare și aplică eliminarea elementului cel mai vechi (\textit{drop-oldest}) la ieșire (\S\ref{subsec:sincronizare}); suplimentar, modulul de captură aplică un mecanism de omitere a cadrelor (\textit{frame-skip}) (\S\ref{subsec:fire_executie}). Consecința directă este că sistemul \emph{nu} procesează fiecare cadru: un eveniment foarte scurt, vizibil exclusiv pe imaginile omise sau abandonate, poate trece neînregistrat. Acesta este compromisul explicit dintre debit/latență (prioritizarea celui mai recent cadru) și completitudinea acoperirii temporale.
+\end{description}
+
+\subsection{Limitări ale modulelor de detecție}
+
+\begin{description}
+	\item[Recunoașterea acțiunilor operează la nivel de clip, nu de cadru.] \hfill \\ Modulul HAR nu poate clasifica un cadru izolat: el acumulează date într-o memorie tampon și produce un rezultat exclusiv periodic, o dată la $\sim$2~s (la fiecare \texttt{clip\_interval\_frames}), pe baza unei secvențe de până la 64 de cadre (\S\ref{subsec:fire_executie}). Rezultă o \emph{întârziere} și o \emph{granularitate} de ordinul secundelor: o acțiune scurtă care începe și se încheie în interiorul unei ferestre de procesare poate fi diluată în contextul clipului sau ratată complet, iar suprapunerea \emph{ultimului rezultat} persistă eticheta anterioară pe cadrele dintre două inferențe.
+	
+\end{description}
+
+\subsection{Limitări ale modelului de date}
+
+\begin{description}
+	\item[Integritatea referențială este sacrificată în favoarea vitezei.] Relația \\ persoană--zonă este denormalizată ca atribut multivaloare \texttt{authorized\_ \linebreak zones TEXT[]}, cu zonele referite prin \emph{nume}, iar câmpurile \texttt{camera\_id} din jurnale și alarme sunt de tip \texttt{VARCHAR}, nu chei externe către tabelul \texttt{cameras} (\S\ref{sec:proiectare_db}). Decizia favorizează citirea rapidă a autorizărilor (reținute în memoria \textit{cache}) și scrierea accelerată a jurnalelor din firul de fuziune, dar baza de date nu mai poate garanta consistența strictă: redenumirea unei zone sau a unui identificator de cameră poate genera referințe logice orfane, fără ca sistemul de gestiune să semnaleze inconsistența.
+	
+	\item[Capturile sunt stocate ca text Base64 în baza de date.] Capturile de \\ imagine (\textit{snapshots}) aferente alarmelor sunt salvate ca șiruri Base64 în coloana \texttt{snapshot} a tabelului \texttt{alarms} (\S\ref{sec:proiectare_db}, \S\ref{subsec:model_evenimente}), iar sistemul nu expune un serviciu de fișiere statice sau un sistem de stocare a obiectelor (\textit{object store}) dedicat. Alegerea simplifică arhitectura aplicației (o singură sursă de adevăr, fără un volum de fișiere fizice de gestionat), însă tabelul de alarme crește necontrolat odată cu volumul de evenimente, îngreunând realizarea copiilor de siguranță (\textit{backups}) și interogările pe care, în mod normal, datele binare voluminoase nu ar trebui să le afecteze.
+\end{description}
+
+\subsection{Limitări de confidențialitate și de gestiune a sesiunilor}
+
+\begin{description}
+	\item[Prelucrarea datelor biometrice ridică probleme de confidențialitate.] Sistemul detectează fețe, stochează reprezentări vectoriale faciale de 512 dimensiuni (date biometrice), estimează atribute demografice (vârstă, gen, emoție) și păstrează capturi ale persoanelor în alarme. Toate acestea constituie categorii de date personale sensibile, vizate de reglementările de protecție a datelor (precum GDPR). Proiectarea actuală tratează riguros \emph{accesul} la aceste informații (control bazat pe roluri, autentificare JWT, parole securizate prin hashing bcrypt -- \S\ref{sec:rbac}), dar nu include, la nivel de arhitectură, un mecanism explicit de \emph{consimțământ}, o politică de \emph{retenție și expirare} a reprezentărilor faciale sau o procedură de anonimizare. 
+\end{description}
+
+Aceste limitări nu invalidează soluția: cele mai multe sunt compromisuri, asumate pentru a satisface scenariul țintă cu resurse hardware realiste, iar fiecare dintre ele constituie un punct de plecare concret pentru direcțiile de dezvoltare viitoare (Capitolul~\ref{ch:concluzii}). Recunoașterea lor explicită face parte din analiza critică a proiectării și delimitează clar domeniul în care sistemul propus reprezintă o soluție adecvată.
+
 
 \end{document}
