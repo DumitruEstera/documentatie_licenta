@@ -1,0 +1,27 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k}{def} \PYG{n+nf}{create\PYGZus{}alarm\PYGZus{}if\PYGZus{}needed}\PYG{p}{(}\PYG{n}{camera\PYGZus{}id}\PYG{p}{,} \PYG{n}{alarm\PYGZus{}type}\PYG{p}{,} \PYG{n}{severity}\PYG{p}{,}
+                           \PYG{n}{description}\PYG{p}{,} \PYG{n}{snapshot}\PYG{p}{,} \PYG{n}{metadata}\PYG{p}{,} \PYG{n}{dedup\PYGZus{}subject}\PYG{p}{):}
+    \PYG{n}{key} \PYG{o}{=} \PYG{l+s+sa}{f}\PYG{l+s+s2}{\PYGZdq{}}\PYG{l+s+si}{\PYGZob{}}\PYG{n}{camera\PYGZus{}id}\PYG{l+s+si}{\PYGZcb{}}\PYG{l+s+s2}{:}\PYG{l+s+si}{\PYGZob{}}\PYG{n}{alarm\PYGZus{}type}\PYG{l+s+si}{\PYGZcb{}}\PYG{l+s+s2}{:}\PYG{l+s+si}{\PYGZob{}}\PYG{n}{dedup\PYGZus{}subject}\PYG{+w}{ }\PYG{o+ow}{or}\PYG{+w}{ }\PYG{l+s+s1}{\PYGZsq{}\PYGZsq{}}\PYG{l+s+si}{\PYGZcb{}}\PYG{l+s+s2}{\PYGZdq{}}
+    \PYG{n}{now} \PYG{o}{=} \PYG{n}{time}\PYG{o}{.}\PYG{n}{time}\PYG{p}{()}
+
+    \PYG{c+c1}{\PYGZsh{} poarta atomica intre fire}
+    \PYG{k}{with} \PYG{n}{alarm\PYGZus{}lock}\PYG{p}{:}
+        \PYG{n}{last} \PYG{o}{=} \PYG{n}{alarm\PYGZus{}cooldowns}\PYG{o}{.}\PYG{n}{get}\PYG{p}{(}\PYG{n}{key}\PYG{p}{,} \PYG{l+m+mi}{0}\PYG{p}{)}
+        \PYG{c+c1}{\PYGZsh{} 30 s}
+        \PYG{k}{if} \PYG{n}{now} \PYG{o}{\PYGZhy{}} \PYG{n}{last} \PYG{o}{\PYGZlt{}} \PYG{n}{ALARM\PYGZus{}COOLDOWN\PYGZus{}SECONDS}\PYG{p}{:}
+            \PYG{c+c1}{\PYGZsh{} duplicat in fereastra de cooldown}
+            \PYG{k}{return}
+        \PYG{c+c1}{\PYGZsh{} rezerva slotul}
+        \PYG{n}{alarm\PYGZus{}cooldowns}\PYG{p}{[}\PYG{n}{key}\PYG{p}{]} \PYG{o}{=} \PYG{n}{now}
+
+    \PYG{c+c1}{\PYGZsh{} Backstop DB: cooldown\PYGZhy{}ul din memorie se pierde la repornire}
+    \PYG{k}{if} \PYG{n}{db}\PYG{o}{.}\PYG{n}{get\PYGZus{}recent\PYGZus{}alarm}\PYG{p}{(}\PYG{n}{camera\PYGZus{}id}\PYG{p}{,} \PYG{n}{alarm\PYGZus{}type}\PYG{p}{,}
+                           \PYG{n}{ALARM\PYGZus{}COOLDOWN\PYGZus{}SECONDS}\PYG{p}{,} \PYG{n}{dedup\PYGZus{}subject}\PYG{p}{):}
+        \PYG{c+c1}{\PYGZsh{} alarma recenta nerezolvata exista deja}
+        \PYG{k}{return}
+
+    \PYG{n}{metadata}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}dedup\PYGZus{}subject\PYGZdq{}}\PYG{p}{]} \PYG{o}{=} \PYG{n}{dedup\PYGZus{}subject}
+    \PYG{n}{db}\PYG{o}{.}\PYG{n}{create\PYGZus{}alarm}\PYG{p}{(}\PYG{n}{camera\PYGZus{}id}\PYG{p}{,} \PYG{n}{alarm\PYGZus{}type}\PYG{p}{,} \PYG{n}{severity}\PYG{p}{,}
+                    \PYG{n}{description}\PYG{p}{,} \PYG{n}{snapshot}\PYG{p}{,} \PYG{n}{metadata}\PYG{p}{)}
+    \PYG{c+c1}{\PYGZsh{} alarma persistata e difuzata in UI (panou alarme, REST)}
+\end{Verbatim}

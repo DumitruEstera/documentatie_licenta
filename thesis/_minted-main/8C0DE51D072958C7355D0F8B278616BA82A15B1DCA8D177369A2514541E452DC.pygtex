@@ -1,0 +1,27 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k}{def} \PYG{n+nf}{update\PYGZus{}frame\PYGZus{}history}\PYG{p}{(}\PYG{n}{class\PYGZus{}name}\PYG{p}{,} \PYG{n}{bbox}\PYG{p}{,} \PYG{n}{matched\PYGZus{}keys}\PYG{p}{):}
+    \PYG{c+c1}{\PYGZsh{} Cauta in istoric caseta cu cea mai mare suprapunere (IoU), aceeasi clasa}
+    \PYG{n}{best\PYGZus{}key}\PYG{p}{,} \PYG{n}{best\PYGZus{}iou} \PYG{o}{=} \PYG{k+kc}{None}\PYG{p}{,} \PYG{l+m+mf}{0.0}
+    \PYG{k}{for} \PYG{n}{key}\PYG{p}{,} \PYG{n}{entry} \PYG{o+ow}{in} \PYG{n}{frame\PYGZus{}history}\PYG{o}{.}\PYG{n}{items}\PYG{p}{():}
+        \PYG{k}{if} \PYG{n}{key} \PYG{o+ow}{in} \PYG{n}{matched\PYGZus{}keys} \PYG{o+ow}{or} \PYG{o+ow}{not} \PYG{n}{key}\PYG{o}{.}\PYG{n}{startswith}\PYG{p}{(}\PYG{n}{class\PYGZus{}name} \PYG{o}{+} \PYG{l+s+s2}{\PYGZdq{}\PYGZus{}\PYGZdq{}}\PYG{p}{):}
+            \PYG{k}{continue}
+        \PYG{n}{iou} \PYG{o}{=} \PYG{n}{compute\PYGZus{}iou}\PYG{p}{(}\PYG{n}{bbox}\PYG{p}{,} \PYG{n}{entry}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}bbox\PYGZdq{}}\PYG{p}{])}
+        \PYG{k}{if} \PYG{n}{iou} \PYG{o}{\PYGZgt{}} \PYG{n}{best\PYGZus{}iou}\PYG{p}{:}
+            \PYG{n}{best\PYGZus{}iou}\PYG{p}{,} \PYG{n}{best\PYGZus{}key} \PYG{o}{=} \PYG{n}{iou}\PYG{p}{,} \PYG{n}{key}
+
+    \PYG{c+c1}{\PYGZsh{} 0.3}
+    \PYG{k}{if} \PYG{n}{best\PYGZus{}key} \PYG{o+ow}{is} \PYG{o+ow}{not} \PYG{k+kc}{None} \PYG{o+ow}{and} \PYG{n}{best\PYGZus{}iou} \PYG{o}{\PYGZgt{}=} \PYG{n}{IOU\PYGZus{}MATCH\PYGZus{}THRESHOLD}\PYG{p}{:}
+        \PYG{c+c1}{\PYGZsh{} streak++}
+        \PYG{n}{frame\PYGZus{}history}\PYG{p}{[}\PYG{n}{best\PYGZus{}key}\PYG{p}{][}\PYG{l+s+s2}{\PYGZdq{}count\PYGZdq{}}\PYG{p}{]} \PYG{o}{+=} \PYG{l+m+mi}{1}
+        \PYG{n}{frame\PYGZus{}history}\PYG{p}{[}\PYG{n}{best\PYGZus{}key}\PYG{p}{][}\PYG{l+s+s2}{\PYGZdq{}bbox\PYGZdq{}}\PYG{p}{]} \PYG{o}{=} \PYG{n}{bbox}
+        \PYG{n}{frame\PYGZus{}history}\PYG{p}{[}\PYG{n}{best\PYGZus{}key}\PYG{p}{][}\PYG{l+s+s2}{\PYGZdq{}last\PYGZus{}seen\PYGZus{}frame\PYGZdq{}}\PYG{p}{]} \PYG{o}{=} \PYG{n}{current\PYGZus{}frame\PYGZus{}number}
+        \PYG{n}{matched\PYGZus{}keys}\PYG{o}{.}\PYG{n}{add}\PYG{p}{(}\PYG{n}{best\PYGZus{}key}\PYG{p}{)}
+        \PYG{k}{return} \PYG{n}{frame\PYGZus{}history}\PYG{p}{[}\PYG{n}{best\PYGZus{}key}\PYG{p}{][}\PYG{l+s+s2}{\PYGZdq{}count\PYGZdq{}}\PYG{p}{]}
+
+    \PYG{c+c1}{\PYGZsh{} Nicio corespondenta: intrare noua, contor initializat la 1}
+    \PYG{n}{new\PYGZus{}key} \PYG{o}{=} \PYG{l+s+sa}{f}\PYG{l+s+s2}{\PYGZdq{}}\PYG{l+s+si}{\PYGZob{}}\PYG{n}{class\PYGZus{}name}\PYG{l+s+si}{\PYGZcb{}}\PYG{l+s+s2}{\PYGZus{}}\PYG{l+s+si}{\PYGZob{}}\PYG{n}{current\PYGZus{}frame\PYGZus{}number}\PYG{l+s+si}{\PYGZcb{}}\PYG{l+s+s2}{\PYGZus{}}\PYG{l+s+si}{\PYGZob{}}\PYG{n+nb}{id}\PYG{p}{(}\PYG{n}{bbox}\PYG{p}{)}\PYG{l+s+si}{\PYGZcb{}}\PYG{l+s+s2}{\PYGZdq{}}
+    \PYG{n}{frame\PYGZus{}history}\PYG{p}{[}\PYG{n}{new\PYGZus{}key}\PYG{p}{]} \PYG{o}{=} \PYG{p}{\PYGZob{}}\PYG{l+s+s2}{\PYGZdq{}bbox\PYGZdq{}}\PYG{p}{:} \PYG{n}{bbox}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}count\PYGZdq{}}\PYG{p}{:} \PYG{l+m+mi}{1}\PYG{p}{,}
+                              \PYG{l+s+s2}{\PYGZdq{}last\PYGZus{}seen\PYGZus{}frame\PYGZdq{}}\PYG{p}{:} \PYG{n}{current\PYGZus{}frame\PYGZus{}number}\PYG{p}{\PYGZcb{}}
+    \PYG{n}{matched\PYGZus{}keys}\PYG{o}{.}\PYG{n}{add}\PYG{p}{(}\PYG{n}{new\PYGZus{}key}\PYG{p}{)}
+    \PYG{k}{return} \PYG{l+m+mi}{1}
+\end{Verbatim}

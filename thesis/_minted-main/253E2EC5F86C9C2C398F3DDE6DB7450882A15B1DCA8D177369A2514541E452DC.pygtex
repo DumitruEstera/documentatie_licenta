@@ -1,0 +1,32 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{c+c1}{\PYGZsh{} candidati YOLOv10}
+\PYG{k}{for} \PYG{n}{box} \PYG{o+ow}{in} \PYG{n}{yolo\PYGZus{}results}\PYG{o}{.}\PYG{n}{boxes}\PYG{p}{:}
+    \PYG{n}{x1}\PYG{p}{,} \PYG{n}{y1}\PYG{p}{,} \PYG{n}{x2}\PYG{p}{,} \PYG{n}{y2} \PYG{o}{=} \PYG{n}{clamp\PYGZus{}to\PYGZus{}frame}\PYG{p}{(}\PYG{n}{box}\PYG{o}{.}\PYG{n}{xyxy}\PYG{p}{)}
+    \PYG{n}{class\PYGZus{}name}\PYG{p}{,} \PYG{n}{conf} \PYG{o}{=} \PYG{n}{box}\PYG{o}{.}\PYG{n}{class\PYGZus{}name}\PYG{p}{,} \PYG{n}{box}\PYG{o}{.}\PYG{n}{conf}
+
+    \PYG{c+c1}{\PYGZsh{} Filtru 1: prag de incredere diferentiat pe clasa (fire 0.40 / smoke 0.55)}
+    \PYG{k}{if} \PYG{n}{conf} \PYG{o}{\PYGZlt{}} \PYG{n}{CONF\PYGZus{}THRESHOLDS}\PYG{p}{[}\PYG{n}{class\PYGZus{}name}\PYG{p}{]:}
+        \PYG{k}{continue}
+
+    \PYG{c+c1}{\PYGZsh{} Filtru 2: plauzibilitate dimensionala (intre 0.3\PYGZpc{} si 85\PYGZpc{} din cadru)}
+    \PYG{n}{area\PYGZus{}ratio} \PYG{o}{=} \PYG{p}{(}\PYG{n}{x2} \PYG{o}{\PYGZhy{}} \PYG{n}{x1}\PYG{p}{)} \PYG{o}{*} \PYG{p}{(}\PYG{n}{y2} \PYG{o}{\PYGZhy{}} \PYG{n}{y1}\PYG{p}{)} \PYG{o}{/} \PYG{n}{frame\PYGZus{}area}
+    \PYG{k}{if} \PYG{o+ow}{not} \PYG{p}{(}\PYG{n}{MIN\PYGZus{}AREA\PYGZus{}RATIO} \PYG{o}{\PYGZlt{}=} \PYG{n}{area\PYGZus{}ratio} \PYG{o}{\PYGZlt{}=} \PYG{n}{MAX\PYGZus{}AREA\PYGZus{}RATIO}\PYG{p}{):}
+        \PYG{n}{stats}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}rejected\PYGZus{}by\PYGZus{}size\PYGZdq{}}\PYG{p}{]} \PYG{o}{+=} \PYG{l+m+mi}{1}
+        \PYG{k}{continue}
+
+    \PYG{c+c1}{\PYGZsh{} Filtru 3: verificare cromatica euristica in HSV}
+    \PYG{k}{if} \PYG{o+ow}{not} \PYG{n}{color\PYGZus{}plausible}\PYG{p}{(}\PYG{n}{frame}\PYG{p}{[}\PYG{n}{y1}\PYG{p}{:}\PYG{n}{y2}\PYG{p}{,} \PYG{n}{x1}\PYG{p}{:}\PYG{n}{x2}\PYG{p}{],} \PYG{n}{class\PYGZus{}name}\PYG{p}{):}
+        \PYG{n}{stats}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}rejected\PYGZus{}by\PYGZus{}color\PYGZdq{}}\PYG{p}{]} \PYG{o}{+=} \PYG{l+m+mi}{1}
+        \PYG{k}{continue}
+
+    \PYG{c+c1}{\PYGZsh{} Filtru 4: confirmare temporala prin tracking IoU}
+    \PYG{n}{consecutive} \PYG{o}{=} \PYG{n}{update\PYGZus{}frame\PYGZus{}history}\PYG{p}{(}\PYG{n}{class\PYGZus{}name}\PYG{p}{,} \PYG{p}{(}\PYG{n}{x1}\PYG{p}{,} \PYG{n}{y1}\PYG{p}{,} \PYG{n}{x2}\PYG{p}{,} \PYG{n}{y2}\PYG{p}{),} \PYG{n}{matched\PYGZus{}keys}\PYG{p}{)}
+    \PYG{c+c1}{\PYGZsh{} 6 cadre consecutive}
+    \PYG{n}{confirmed} \PYG{o}{=} \PYG{n}{consecutive} \PYG{o}{\PYGZgt{}=} \PYG{n}{MIN\PYGZus{}CONSECUTIVE\PYGZus{}FRAMES}
+
+    \PYG{c+c1}{\PYGZsh{} Filtru 5: cooldown de alerta pe locatie (3 s)}
+    \PYG{n}{should\PYGZus{}alert} \PYG{o}{=} \PYG{n}{confirmed} \PYG{o+ow}{and} \PYG{n}{alert\PYGZus{}cooldown\PYGZus{}expired}\PYG{p}{(}\PYG{n}{class\PYGZus{}name}\PYG{p}{,} \PYG{n}{x1}\PYG{p}{,} \PYG{n}{y1}\PYG{p}{)}
+
+    \PYG{n}{detections}\PYG{o}{.}\PYG{n}{append}\PYG{p}{(\PYGZob{}}\PYG{l+s+s2}{\PYGZdq{}bbox\PYGZdq{}}\PYG{p}{:} \PYG{p}{(}\PYG{n}{x1}\PYG{p}{,} \PYG{n}{y1}\PYG{p}{,} \PYG{n}{x2}\PYG{p}{,} \PYG{n}{y2}\PYG{p}{),} \PYG{l+s+s2}{\PYGZdq{}class\PYGZdq{}}\PYG{p}{:} \PYG{n}{class\PYGZus{}name}\PYG{p}{,}
+                       \PYG{l+s+s2}{\PYGZdq{}confirmed\PYGZdq{}}\PYG{p}{:} \PYG{n}{confirmed}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}alert\PYGZdq{}}\PYG{p}{:} \PYG{n}{should\PYGZus{}alert}\PYG{p}{\PYGZcb{})}
+\end{Verbatim}

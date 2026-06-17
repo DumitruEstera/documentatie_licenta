@@ -84,28 +84,27 @@
 \DeclareTextFontCommand{\inlinecodenonboxed}{\codeenv}
 \newcommand{\inlinecode}[1]{\mbox{\inlinecodenonboxed{#1}}}
 
-% Python code listings
-\usepackage{listings}
-\renewcommand{\lstlistingname}{Listing}
-\lstdefinestyle{pythonthesis}{
-  language=Python,
-  basicstyle=\ttfamily\footnotesize,
-  keywordstyle=\color{blue!65!black}\bfseries,
-  commentstyle=\color{green!45!black}\itshape,
-  stringstyle=\color{orange!75!black},
-  numbers=left,
-  numberstyle=\tiny\color{gray},
+% Python code listings (minted + Pygments)
+% ATENTIE: necesita compilare cu pdflatex -shell-escape (seteaza flag-ul in TeXstudio).
+\usepackage[chapter]{minted}   % numeroteaza listing-urile per capitol -> "Listing 5.1"
+\usemintedstyle{vs}      % stil de colorare (se schimba dintr-o singura linie)
+\setminted{
+  fontsize=\footnotesize,
+  linenos,                                   % numere de linie in stanga
   numbersep=8pt,
-  showstringspaces=false,
-  breaklines=true,
-  breakatwhitespace=true,
-  frame=tb,
-  captionpos=b,
+  breaklines,                                % rupe liniile prea lungi
+  breakanywhere=false,                       % rupe doar la spatii, nu in mijlocul unui token
+  breakindent=0pt,
+  breaksymbolleft=\textcolor{gray}{\footnotesize$\hookrightarrow$},  % marcaj de continuare
+  frame=lines,                               % linii sus si jos (ca vechiul frame=tb)
+  framesep=2mm,
+  rulecolor=\color{gray!50},
+  xleftmargin=1.5em,
   tabsize=4,
-  xleftmargin=2em,
-  extendedchars=true,
+  autogobble,                                % elimina indentarea comuna din fata
 }
-\lstset{style=pythonthesis}
+\renewcommand{\listingscaption}{Listing}
+\renewcommand{\listoflistingscaption}{Listă de Listinguri}
 
 % Custom abbreviation item
 \newenvironment{abbreviations}{\begin{list}{}{\renewcommand{\makelabel}{\abbrlabel}}}{\end{list}}

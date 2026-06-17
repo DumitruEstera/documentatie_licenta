@@ -888,7 +888,8 @@ O alarmă este creată prin metoda \texttt{\_create\_alarm\_if\_needed(camera\_i
 
 Listing-ul~\ref{lst:decizie_alarmare} ilustrează modul în care aceste reguli sunt evaluate în cadrul firului de fuziune. Cele cinci categorii de detecții sunt analizate independent pentru fiecare cadru, permițând astfel generarea simultană a mai multor alarme pe baza unei singure imagini. Fiecare ramură de execuție determină tipul, nivelul de severitate și subiectul de deduplicare (\texttt{dedup\_subject}), delegând ulterior operațiunea de salvare persistentă către funcția comună \texttt{create\_alarm\_if\_ \linebreak needed} (Listing-ul~\ref{lst:dedup_alarme}).
 
-\begin{lstlisting}[caption={Decizia de alarmare pentru un cadru, în firul de fuziune (\texttt{app.py}).},label={lst:decizie_alarmare}]
+\begin{listing}[H]
+\begin{minted}{python}
 # Ruleaza dupa ce rezultatele unui cadru au fost agregate
 for face in results.faces:
     if face.name == "Unknown":
@@ -904,26 +905,33 @@ for weapon in results.weapons:
                            dedup_subject=weapon.cls)
 
 for fire in results.fire:
-    if fire.confirmed and fire.alert:          # confirmare temporala multi-cadru
+    # confirmare temporala multi-cadru
+    if fire.confirmed and fire.alert:
         severity = "critical" if fire.cls == "fire" else "high"
         create_alarm_if_needed(camera_id, "fire", severity,
                                dedup_subject=fire.cls)
 
 for action in results.har:
-    if action.cls != "normal":                 # fight, vandalism, ...
+    # fight, vandalism, ...
+    if action.cls != "normal":
         create_alarm_if_needed(camera_id, "har", action.severity,
                                dedup_subject=action.cls)
 
 for plate in results.plates:
-    if plate.text in (None, "", "UNKNOWN"):    # fara citire OCR valida
+    # fara citire OCR valida
+    if plate.text in (None, "", "UNKNOWN"):
         continue
     authorized = plate.text in authorized_plates
-    log_detection_if_needed(camera_id, "plate",                # placuta e si jurnalizata
+    # placuta e si jurnalizata
+    log_detection_if_needed(camera_id, "plate",
                             status="authorized" if authorized else "unauthorized")
     if not authorized:
         create_alarm_if_needed(camera_id, "plate", "high",
                                dedup_subject=plate.text)
-\end{lstlisting}
+\end{minted}
+\caption{Decizia de alarmare pentru un cadru, în firul de fuziune (\texttt{app.py}).}
+\label{lst:decizie_alarmare}
+\end{listing}
 
 \paragraph*{Notă.} Spre deosebire de regula persoanelor, alarma de plăcuță este \emph{globală} (nu depinde de zona camerei): o plăcuță este considerată neautorizată dacă numărul ei nu apare în baza de date, indiferent de cameră (vezi \S\ref{subsec:cerinte_functionale}, F3 și F7).
 
@@ -964,28 +972,37 @@ Pe lângă poarta din memorie (care se pierde la repornire), există un \linebre
 
 Listing-ul~\ref{lst:dedup_alarme} detaliază această componentă centralizată prin care este direc-ționat orice apel către funcția \texttt{create\_alarm\_if\_needed} (introdusă în Listing-ul~\ref{lst:decizie_alarmare}). Verificarea și rezervarea intervalului de latență (\textit{cooldown}) se realizează în mod atomic, operațiunile fiind protejate de mecanismul de excludere mutuală \texttt{alarm\_lock}. Această etapă este urmată de o verificare redundantă (\textit{backstop}) la nivelul bazei de date, procesul finalizându-se cu înregistrarea persistentă și difuzarea alarmei către clienți.
 
-\begin{lstlisting}[caption={Poarta comună de deduplicare a alarmelor (\texttt{\_create\_alarm\_if\_needed} din \texttt{app.py}).},label={lst:dedup_alarme}]
+\begin{listing}[H]
+\begin{minted}{python}
 def create_alarm_if_needed(camera_id, alarm_type, severity,
                            description, snapshot, metadata, dedup_subject):
     key = f"{camera_id}:{alarm_type}:{dedup_subject or ''}"
     now = time.time()
 
-    with alarm_lock:                          # poarta atomica intre fire
+    # poarta atomica intre fire
+    with alarm_lock:
         last = alarm_cooldowns.get(key, 0)
-        if now - last < ALARM_COOLDOWN_SECONDS:   # 30 s
-            return                            # duplicat in fereastra de cooldown
-        alarm_cooldowns[key] = now            # rezerva slotul
+        # 30 s
+        if now - last < ALARM_COOLDOWN_SECONDS:
+            # duplicat in fereastra de cooldown
+            return
+        # rezerva slotul
+        alarm_cooldowns[key] = now
 
     # Backstop DB: cooldown-ul din memorie se pierde la repornire
     if db.get_recent_alarm(camera_id, alarm_type,
                            ALARM_COOLDOWN_SECONDS, dedup_subject):
-        return                                # alarma recenta nerezolvata exista deja
+        # alarma recenta nerezolvata exista deja
+        return
 
     metadata["dedup_subject"] = dedup_subject
     db.create_alarm(camera_id, alarm_type, severity,
                     description, snapshot, metadata)
     # alarma persistata e difuzata in UI (panou alarme, REST)
-\end{lstlisting}
+\end{minted}
+\caption{Poarta comună de deduplicare a alarmelor (\texttt{\_create\_alarm\_if\_needed} din \texttt{app.py}).}
+\label{lst:dedup_alarme}
+\end{listing}
 
 Figura~\ref{fig:flux_alarmare} sintetizează fluxul decizional complet de alarmare pentru un singur cadru, de la evaluarea rezultatelor agregate până la stocarea persistentă a evenimentului prin intermediul mecanismului centralizat de deduplicare.
 

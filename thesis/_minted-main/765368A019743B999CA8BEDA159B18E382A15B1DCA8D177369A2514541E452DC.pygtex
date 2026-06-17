@@ -1,0 +1,30 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{c+c1}{\PYGZsh{} T cadre (T, H, W, 3) \PYGZhy{}\PYGZgt{} pereche de tensori pentru cele doua cai SlowFast}
+\PYG{k}{def} \PYG{n+nf}{pack\PYGZus{}frames\PYGZus{}slowfast}\PYG{p}{(}\PYG{n}{frames}\PYG{p}{,} \PYG{n}{num\PYGZus{}slow}\PYG{o}{=}\PYG{l+m+mi}{8}\PYG{p}{,} \PYG{n}{num\PYGZus{}fast}\PYG{o}{=}\PYG{l+m+mi}{32}\PYG{p}{,} \PYG{n}{crop\PYGZus{}size}\PYG{o}{=}\PYG{l+m+mi}{224}\PYG{p}{):}
+    \PYG{n}{T\PYGZus{}total} \PYG{o}{=} \PYG{n}{frames}\PYG{o}{.}\PYG{n}{shape}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{]}
+    \PYG{c+c1}{\PYGZsh{} Esantionare uniforma a indicilor de\PYGZhy{}a lungul clipului (2.0 s)}
+    \PYG{c+c1}{\PYGZsh{} 8 cadre}
+    \PYG{n}{slow\PYGZus{}idx} \PYG{o}{=} \PYG{n}{np}\PYG{o}{.}\PYG{n}{linspace}\PYG{p}{(}\PYG{l+m+mi}{0}\PYG{p}{,} \PYG{n}{T\PYGZus{}total} \PYG{o}{\PYGZhy{}} \PYG{l+m+mi}{1}\PYG{p}{,} \PYG{n}{num\PYGZus{}slow}\PYG{p}{,} \PYG{n}{dtype}\PYG{o}{=}\PYG{n}{np}\PYG{o}{.}\PYG{n}{int64}\PYG{p}{)}
+    \PYG{c+c1}{\PYGZsh{} 32 cadre}
+    \PYG{n}{fast\PYGZus{}idx} \PYG{o}{=} \PYG{n}{np}\PYG{o}{.}\PYG{n}{linspace}\PYG{p}{(}\PYG{l+m+mi}{0}\PYG{p}{,} \PYG{n}{T\PYGZus{}total} \PYG{o}{\PYGZhy{}} \PYG{l+m+mi}{1}\PYG{p}{,} \PYG{n}{num\PYGZus{}fast}\PYG{p}{,} \PYG{n}{dtype}\PYG{o}{=}\PYG{n}{np}\PYG{o}{.}\PYG{n}{int64}\PYG{p}{)}
+    \PYG{n}{slow\PYGZus{}tensor} \PYG{o}{=} \PYG{n}{frames\PYGZus{}to\PYGZus{}tensor}\PYG{p}{(}\PYG{n}{frames}\PYG{p}{[}\PYG{n}{slow\PYGZus{}idx}\PYG{p}{],} \PYG{n}{crop\PYGZus{}size}\PYG{p}{)}
+    \PYG{n}{fast\PYGZus{}tensor} \PYG{o}{=} \PYG{n}{frames\PYGZus{}to\PYGZus{}tensor}\PYG{p}{(}\PYG{n}{frames}\PYG{p}{[}\PYG{n}{fast\PYGZus{}idx}\PYG{p}{],} \PYG{n}{crop\PYGZus{}size}\PYG{p}{)}
+    \PYG{c+c1}{\PYGZsh{} (3, 8, 224, 224) si (3, 32, 224, 224)}
+    \PYG{k}{return} \PYG{p}{[}\PYG{n}{slow\PYGZus{}tensor}\PYG{p}{,} \PYG{n}{fast\PYGZus{}tensor}\PYG{p}{]}
+
+\PYG{k}{def} \PYG{n+nf}{frames\PYGZus{}to\PYGZus{}tensor}\PYG{p}{(}\PYG{n}{frames}\PYG{p}{,} \PYG{n}{crop\PYGZus{}size}\PYG{p}{):}
+    \PYG{n}{imgs} \PYG{o}{=} \PYG{p}{[]}
+    \PYG{c+c1}{\PYGZsh{} fiecare cadru (H, W, 3)}
+    \PYG{k}{for} \PYG{n}{f} \PYG{o+ow}{in} \PYG{n}{frames}\PYG{p}{:}
+        \PYG{c+c1}{\PYGZsh{} (3, H, W), valori in [0, 1]}
+        \PYG{n}{img} \PYG{o}{=} \PYG{n}{to\PYGZus{}tensor}\PYG{p}{(}\PYG{n}{f}\PYG{p}{)}\PYG{o}{.}\PYG{n}{float}\PYG{p}{()} \PYG{o}{/} \PYG{l+m+mf}{255.0}
+        \PYG{c+c1}{\PYGZsh{} decupare spatiala 224x224}
+        \PYG{n}{img} \PYG{o}{=} \PYG{n}{resize}\PYG{p}{(}\PYG{n}{img}\PYG{p}{,} \PYG{p}{[}\PYG{n}{crop\PYGZus{}size}\PYG{p}{,} \PYG{n}{crop\PYGZus{}size}\PYG{p}{])}
+        \PYG{n}{imgs}\PYG{o}{.}\PYG{n}{append}\PYG{p}{(}\PYG{n}{img}\PYG{p}{)}
+    \PYG{c+c1}{\PYGZsh{} (3, T, 224, 224)}
+    \PYG{n}{tensor} \PYG{o}{=} \PYG{n}{torch}\PYG{o}{.}\PYG{n}{stack}\PYG{p}{(}\PYG{n}{imgs}\PYG{p}{,} \PYG{n}{dim}\PYG{o}{=}\PYG{l+m+mi}{1}\PYG{p}{)}
+    \PYG{c+c1}{\PYGZsh{} Normalizare cu media / deviatia standard Kinetics\PYGZhy{}400}
+    \PYG{n}{mean} \PYG{o}{=} \PYG{n}{torch}\PYG{o}{.}\PYG{n}{tensor}\PYG{p}{([}\PYG{l+m+mf}{0.45}\PYG{p}{,} \PYG{l+m+mf}{0.45}\PYG{p}{,} \PYG{l+m+mf}{0.45}\PYG{p}{])}\PYG{o}{.}\PYG{n}{view}\PYG{p}{(}\PYG{l+m+mi}{3}\PYG{p}{,} \PYG{l+m+mi}{1}\PYG{p}{,} \PYG{l+m+mi}{1}\PYG{p}{,} \PYG{l+m+mi}{1}\PYG{p}{)}
+    \PYG{n}{std}  \PYG{o}{=} \PYG{n}{torch}\PYG{o}{.}\PYG{n}{tensor}\PYG{p}{([}\PYG{l+m+mf}{0.225}\PYG{p}{,} \PYG{l+m+mf}{0.225}\PYG{p}{,} \PYG{l+m+mf}{0.225}\PYG{p}{])}\PYG{o}{.}\PYG{n}{view}\PYG{p}{(}\PYG{l+m+mi}{3}\PYG{p}{,} \PYG{l+m+mi}{1}\PYG{p}{,} \PYG{l+m+mi}{1}\PYG{p}{,} \PYG{l+m+mi}{1}\PYG{p}{)}
+    \PYG{k}{return} \PYG{p}{(}\PYG{n}{tensor} \PYG{o}{\PYGZhy{}} \PYG{n}{mean}\PYG{p}{)} \PYG{o}{/} \PYG{n}{std}
+\end{Verbatim}

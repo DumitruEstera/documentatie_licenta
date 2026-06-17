@@ -1,0 +1,32 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{c+c1}{\PYGZsh{} vector L2\PYGZhy{}normalizat, 512\PYGZhy{}d}
+\PYG{k}{def} \PYG{n+nf}{match\PYGZus{}embedding}\PYG{p}{(}\PYG{n}{embedding}\PYG{p}{):}
+    \PYG{c+c1}{\PYGZsh{} Cautare nemarginita: inregistram distanta reala pentru calibrare,}
+    \PYG{c+c1}{\PYGZsh{} apoi aplicam noi pragul de decizie configurat}
+    \PYG{n}{raw} \PYG{o}{=} \PYG{n}{faiss\PYGZus{}index}\PYG{o}{.}\PYG{n}{search}\PYG{p}{(}\PYG{n}{embedding}\PYG{p}{,} \PYG{n}{k}\PYG{o}{=}\PYG{l+m+mi}{1}\PYG{p}{,} \PYG{n}{threshold}\PYG{o}{=}\PYG{n+nb}{float}\PYG{p}{(}\PYG{l+s+s2}{\PYGZdq{}inf\PYGZdq{}}\PYG{p}{))}
+    \PYG{k}{if} \PYG{o+ow}{not} \PYG{n}{raw}\PYG{p}{:}
+        \PYG{c+c1}{\PYGZsh{} index gol, niciun candidat}
+        \PYG{k}{return} \PYG{k+kc}{None}
+
+    \PYG{c+c1}{\PYGZsh{} cel mai apropiat vecin (distanta L2)}
+    \PYG{n}{person\PYGZus{}id}\PYG{p}{,} \PYG{n}{distance} \PYG{o}{=} \PYG{n}{raw}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{]}
+
+    \PYG{c+c1}{\PYGZsh{} 1.0  (echivalent cos\PYGZus{}sim = 0.5)}
+    \PYG{k}{if} \PYG{n}{distance} \PYG{o}{\PYGZgt{}=} \PYG{n}{recognition\PYGZus{}threshold}\PYG{p}{:}
+        \PYG{c+c1}{\PYGZsh{} fata necunoscuta}
+        \PYG{k}{return} \PYG{k+kc}{None}
+
+    \PYG{c+c1}{\PYGZsh{} Vectori L2\PYGZhy{}normalizati: L2\PYGZca{}2 = 2 \PYGZhy{} 2*cos\PYGZus{}sim  =\PYGZgt{}  cos\PYGZus{}sim = 1 \PYGZhy{} L2\PYGZca{}2/2}
+    \PYG{n}{cos\PYGZus{}sim} \PYG{o}{=} \PYG{l+m+mf}{1.0} \PYG{o}{\PYGZhy{}} \PYG{n}{distance} \PYG{o}{**} \PYG{l+m+mi}{2} \PYG{o}{/} \PYG{l+m+mf}{2.0}
+    \PYG{c+c1}{\PYGZsh{} marginit la [0, 1]}
+    \PYG{n}{confidence} \PYG{o}{=} \PYG{n+nb}{max}\PYG{p}{(}\PYG{l+m+mf}{0.0}\PYG{p}{,} \PYG{n+nb}{min}\PYG{p}{(}\PYG{l+m+mf}{1.0}\PYG{p}{,} \PYG{n}{cos\PYGZus{}sim}\PYG{p}{))}
+
+    \PYG{n}{person} \PYG{o}{=} \PYG{n}{db}\PYG{o}{.}\PYG{n}{get\PYGZus{}person\PYGZus{}by\PYGZus{}id}\PYG{p}{(}\PYG{n}{person\PYGZus{}id}\PYG{p}{)}
+    \PYG{k}{if} \PYG{o+ow}{not} \PYG{n}{person}\PYG{p}{:}
+        \PYG{k}{return} \PYG{k+kc}{None}
+    \PYG{k}{return} \PYG{p}{\PYGZob{}}\PYG{l+s+s2}{\PYGZdq{}person\PYGZus{}id\PYGZdq{}}\PYG{p}{:} \PYG{n}{person\PYGZus{}id}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}name\PYGZdq{}}\PYG{p}{:} \PYG{n}{person}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}name\PYGZdq{}}\PYG{p}{],}
+            \PYG{l+s+s2}{\PYGZdq{}confidence\PYGZdq{}}\PYG{p}{:} \PYG{n}{confidence}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}distance\PYGZdq{}}\PYG{p}{:} \PYG{n}{distance}\PYG{p}{\PYGZcb{}}
+
+\PYG{c+c1}{\PYGZsh{} In process\PYGZus{}frame() o fata e considerata cunoscuta doar daca exista o}
+\PYG{c+c1}{\PYGZsh{} potrivire SI confidence \PYGZgt{} min\PYGZus{}confidence (0.4); altfel ramane \PYGZdq{}Unknown\PYGZdq{}.}
+\end{Verbatim}

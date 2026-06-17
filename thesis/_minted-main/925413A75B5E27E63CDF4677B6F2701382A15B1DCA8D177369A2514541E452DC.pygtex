@@ -1,0 +1,26 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{c+c1}{\PYGZsh{} Detectie care a trecut filtrele 1\PYGZhy{}3 (incredere, dimensiune, HSV):}
+\PYG{n}{consecutive} \PYG{o}{=} \PYG{n}{update\PYGZus{}frame\PYGZus{}history}\PYG{p}{(}\PYG{n}{class\PYGZus{}name}\PYG{p}{,} \PYG{p}{(}\PYG{n}{x1}\PYG{p}{,} \PYG{n}{y1}\PYG{p}{,} \PYG{n}{x2}\PYG{p}{,} \PYG{n}{y2}\PYG{p}{),} \PYG{n}{matched\PYGZus{}keys}\PYG{p}{)}
+\PYG{c+c1}{\PYGZsh{} 6 cadre consecutive}
+\PYG{n}{confirmed} \PYG{o}{=} \PYG{n}{consecutive} \PYG{o}{\PYGZgt{}=} \PYG{n}{MIN\PYGZus{}CONSECUTIVE\PYGZus{}FRAMES}
+
+\PYG{n}{should\PYGZus{}alert} \PYG{o}{=} \PYG{k+kc}{False}
+\PYG{k}{if} \PYG{n}{confirmed}\PYG{p}{:}
+    \PYG{c+c1}{\PYGZsh{} Cheie de locatie cuantizata, ca fluctuatiile mici sa fie aceeasi sursa}
+    \PYG{n}{alert\PYGZus{}key} \PYG{o}{=} \PYG{l+s+sa}{f}\PYG{l+s+s2}{\PYGZdq{}}\PYG{l+s+si}{\PYGZob{}}\PYG{n}{class\PYGZus{}name}\PYG{l+s+si}{\PYGZcb{}}\PYG{l+s+s2}{\PYGZus{}}\PYG{l+s+si}{\PYGZob{}}\PYG{n}{x1}\PYG{+w}{ }\PYG{o}{//}\PYG{+w}{ }\PYG{l+m+mi}{40}\PYG{l+s+si}{\PYGZcb{}}\PYG{l+s+s2}{\PYGZus{}}\PYG{l+s+si}{\PYGZob{}}\PYG{n}{y1}\PYG{+w}{ }\PYG{o}{//}\PYG{+w}{ }\PYG{l+m+mi}{40}\PYG{l+s+si}{\PYGZcb{}}\PYG{l+s+s2}{\PYGZdq{}}
+    \PYG{n}{last} \PYG{o}{=} \PYG{n}{last\PYGZus{}alert\PYGZus{}time}\PYG{o}{.}\PYG{n}{get}\PYG{p}{(}\PYG{n}{alert\PYGZus{}key}\PYG{p}{)}
+    \PYG{c+c1}{\PYGZsh{} 3 s}
+    \PYG{k}{if} \PYG{n}{last} \PYG{o+ow}{is} \PYG{k+kc}{None} \PYG{o+ow}{or} \PYG{p}{(}\PYG{n}{now} \PYG{o}{\PYGZhy{}} \PYG{n}{last}\PYG{p}{)}\PYG{o}{.}\PYG{n}{total\PYGZus{}seconds}\PYG{p}{()} \PYG{o}{\PYGZgt{}} \PYG{n}{ALERT\PYGZus{}COOLDOWN}\PYG{p}{:}
+        \PYG{n}{should\PYGZus{}alert} \PYG{o}{=} \PYG{k+kc}{True}
+        \PYG{n}{last\PYGZus{}alert\PYGZus{}time}\PYG{p}{[}\PYG{n}{alert\PYGZus{}key}\PYG{p}{]} \PYG{o}{=} \PYG{n}{now}
+
+\PYG{c+c1}{\PYGZsh{} eveniment real: se deseneaza pe cadru}
+\PYG{n}{detection}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}confirmed\PYGZdq{}}\PYG{p}{]} \PYG{o}{=} \PYG{n}{confirmed}
+\PYG{c+c1}{\PYGZsh{} momentul de declansare a alarmei}
+\PYG{n}{detection}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}alert\PYGZdq{}}\PYG{p}{]} \PYG{o}{=} \PYG{n}{should\PYGZus{}alert}
+
+\PYG{c+c1}{\PYGZsh{} La finalul cadrului: intrarile nevazute acum sunt sterse (streak intrerupt)}
+\PYG{k}{for} \PYG{n}{k} \PYG{o+ow}{in} \PYG{p}{[}\PYG{n}{k} \PYG{k}{for} \PYG{n}{k}\PYG{p}{,} \PYG{n}{v} \PYG{o+ow}{in} \PYG{n}{frame\PYGZus{}history}\PYG{o}{.}\PYG{n}{items}\PYG{p}{()}
+          \PYG{k}{if} \PYG{n}{v}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}last\PYGZus{}seen\PYGZus{}frame\PYGZdq{}}\PYG{p}{]} \PYG{o}{\PYGZlt{}} \PYG{n}{current\PYGZus{}frame\PYGZus{}number}\PYG{p}{]:}
+    \PYG{k}{del} \PYG{n}{frame\PYGZus{}history}\PYG{p}{[}\PYG{n}{k}\PYG{p}{]}
+\end{Verbatim}

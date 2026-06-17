@@ -1,0 +1,40 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{c+c1}{\PYGZsh{} Ruleaza dupa ce rezultatele unui cadru au fost agregate}
+\PYG{k}{for} \PYG{n}{face} \PYG{o+ow}{in} \PYG{n}{results}\PYG{o}{.}\PYG{n}{faces}\PYG{p}{:}
+    \PYG{k}{if} \PYG{n}{face}\PYG{o}{.}\PYG{n}{name} \PYG{o}{==} \PYG{l+s+s2}{\PYGZdq{}Unknown\PYGZdq{}}\PYG{p}{:}
+        \PYG{n}{create\PYGZus{}alarm\PYGZus{}if\PYGZus{}needed}\PYG{p}{(}\PYG{n}{camera\PYGZus{}id}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}face\PYGZdq{}}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}critical\PYGZdq{}}\PYG{p}{,}
+                               \PYG{n}{dedup\PYGZus{}subject}\PYG{o}{=}\PYG{n}{bbox\PYGZus{}bucket}\PYG{p}{(}\PYG{n}{face}\PYG{o}{.}\PYG{n}{bbox}\PYG{p}{))}
+    \PYG{k}{if} \PYG{n}{camera}\PYG{o}{.}\PYG{n}{zone}\PYG{o}{.}\PYG{n}{is\PYGZus{}restricted} \PYG{o+ow}{and} \PYG{o+ow}{not} \PYG{n}{is\PYGZus{}authorized}\PYG{p}{(}\PYG{n}{face}\PYG{p}{,} \PYG{n}{camera}\PYG{o}{.}\PYG{n}{zone}\PYG{p}{):}
+        \PYG{n}{subject} \PYG{o}{=} \PYG{n}{bbox\PYGZus{}bucket}\PYG{p}{(}\PYG{n}{face}\PYG{o}{.}\PYG{n}{bbox}\PYG{p}{)} \PYG{k}{if} \PYG{n}{face}\PYG{o}{.}\PYG{n}{is\PYGZus{}unknown} \PYG{k}{else} \PYG{n}{face}\PYG{o}{.}\PYG{n}{employee\PYGZus{}id}
+        \PYG{n}{create\PYGZus{}alarm\PYGZus{}if\PYGZus{}needed}\PYG{p}{(}\PYG{n}{camera\PYGZus{}id}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}unauthorized\PYGZus{}zone\PYGZdq{}}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}critical\PYGZdq{}}\PYG{p}{,}
+                               \PYG{n}{dedup\PYGZus{}subject}\PYG{o}{=}\PYG{n}{subject}\PYG{p}{)}
+
+\PYG{k}{for} \PYG{n}{weapon} \PYG{o+ow}{in} \PYG{n}{results}\PYG{o}{.}\PYG{n}{weapons}\PYG{p}{:}
+    \PYG{n}{create\PYGZus{}alarm\PYGZus{}if\PYGZus{}needed}\PYG{p}{(}\PYG{n}{camera\PYGZus{}id}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}weapon\PYGZdq{}}\PYG{p}{,} \PYG{n}{weapon}\PYG{o}{.}\PYG{n}{severity}\PYG{p}{,}
+                           \PYG{n}{dedup\PYGZus{}subject}\PYG{o}{=}\PYG{n}{weapon}\PYG{o}{.}\PYG{n}{cls}\PYG{p}{)}
+
+\PYG{k}{for} \PYG{n}{fire} \PYG{o+ow}{in} \PYG{n}{results}\PYG{o}{.}\PYG{n}{fire}\PYG{p}{:}
+    \PYG{c+c1}{\PYGZsh{} confirmare temporala multi\PYGZhy{}cadru}
+    \PYG{k}{if} \PYG{n}{fire}\PYG{o}{.}\PYG{n}{confirmed} \PYG{o+ow}{and} \PYG{n}{fire}\PYG{o}{.}\PYG{n}{alert}\PYG{p}{:}
+        \PYG{n}{severity} \PYG{o}{=} \PYG{l+s+s2}{\PYGZdq{}critical\PYGZdq{}} \PYG{k}{if} \PYG{n}{fire}\PYG{o}{.}\PYG{n}{cls} \PYG{o}{==} \PYG{l+s+s2}{\PYGZdq{}fire\PYGZdq{}} \PYG{k}{else} \PYG{l+s+s2}{\PYGZdq{}high\PYGZdq{}}
+        \PYG{n}{create\PYGZus{}alarm\PYGZus{}if\PYGZus{}needed}\PYG{p}{(}\PYG{n}{camera\PYGZus{}id}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}fire\PYGZdq{}}\PYG{p}{,} \PYG{n}{severity}\PYG{p}{,}
+                               \PYG{n}{dedup\PYGZus{}subject}\PYG{o}{=}\PYG{n}{fire}\PYG{o}{.}\PYG{n}{cls}\PYG{p}{)}
+
+\PYG{k}{for} \PYG{n}{action} \PYG{o+ow}{in} \PYG{n}{results}\PYG{o}{.}\PYG{n}{har}\PYG{p}{:}
+    \PYG{c+c1}{\PYGZsh{} fight, vandalism, ...}
+    \PYG{k}{if} \PYG{n}{action}\PYG{o}{.}\PYG{n}{cls} \PYG{o}{!=} \PYG{l+s+s2}{\PYGZdq{}normal\PYGZdq{}}\PYG{p}{:}
+        \PYG{n}{create\PYGZus{}alarm\PYGZus{}if\PYGZus{}needed}\PYG{p}{(}\PYG{n}{camera\PYGZus{}id}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}har\PYGZdq{}}\PYG{p}{,} \PYG{n}{action}\PYG{o}{.}\PYG{n}{severity}\PYG{p}{,}
+                               \PYG{n}{dedup\PYGZus{}subject}\PYG{o}{=}\PYG{n}{action}\PYG{o}{.}\PYG{n}{cls}\PYG{p}{)}
+
+\PYG{k}{for} \PYG{n}{plate} \PYG{o+ow}{in} \PYG{n}{results}\PYG{o}{.}\PYG{n}{plates}\PYG{p}{:}
+    \PYG{c+c1}{\PYGZsh{} fara citire OCR valida}
+    \PYG{k}{if} \PYG{n}{plate}\PYG{o}{.}\PYG{n}{text} \PYG{o+ow}{in} \PYG{p}{(}\PYG{k+kc}{None}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}\PYGZdq{}}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}UNKNOWN\PYGZdq{}}\PYG{p}{):}
+        \PYG{k}{continue}
+    \PYG{n}{authorized} \PYG{o}{=} \PYG{n}{plate}\PYG{o}{.}\PYG{n}{text} \PYG{o+ow}{in} \PYG{n}{authorized\PYGZus{}plates}
+    \PYG{c+c1}{\PYGZsh{} placuta e si jurnalizata}
+    \PYG{n}{log\PYGZus{}detection\PYGZus{}if\PYGZus{}needed}\PYG{p}{(}\PYG{n}{camera\PYGZus{}id}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}plate\PYGZdq{}}\PYG{p}{,}
+                            \PYG{n}{status}\PYG{o}{=}\PYG{l+s+s2}{\PYGZdq{}authorized\PYGZdq{}} \PYG{k}{if} \PYG{n}{authorized} \PYG{k}{else} \PYG{l+s+s2}{\PYGZdq{}unauthorized\PYGZdq{}}\PYG{p}{)}
+    \PYG{k}{if} \PYG{o+ow}{not} \PYG{n}{authorized}\PYG{p}{:}
+        \PYG{n}{create\PYGZus{}alarm\PYGZus{}if\PYGZus{}needed}\PYG{p}{(}\PYG{n}{camera\PYGZus{}id}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}plate\PYGZdq{}}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}high\PYGZdq{}}\PYG{p}{,}
+                               \PYG{n}{dedup\PYGZus{}subject}\PYG{o}{=}\PYG{n}{plate}\PYG{o}{.}\PYG{n}{text}\PYG{p}{)}
+\end{Verbatim}

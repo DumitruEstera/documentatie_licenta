@@ -1,0 +1,35 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{c+c1}{\PYGZsh{} Faza 1: backbone inghetat \PYGZhy{}\PYGZhy{} se antreneaza doar capul de clasificare}
+\PYG{c+c1}{\PYGZsh{} requires\PYGZus{}grad = False pe backbone}
+\PYG{n}{model}\PYG{o}{.}\PYG{n}{freeze\PYGZus{}backbone}\PYG{p}{()}
+\PYG{n}{optimizer} \PYG{o}{=} \PYG{n}{AdamW}\PYG{p}{(}
+    \PYG{c+c1}{\PYGZsh{} doar parametrii activi}
+    \PYG{n+nb}{filter}\PYG{p}{(}\PYG{k}{lambda} \PYG{n}{p}\PYG{p}{:} \PYG{n}{p}\PYG{o}{.}\PYG{n}{requires\PYGZus{}grad}\PYG{p}{,} \PYG{n}{model}\PYG{o}{.}\PYG{n}{parameters}\PYG{p}{()),}
+    \PYG{n}{lr}\PYG{o}{=}\PYG{n}{LR}\PYG{p}{,} \PYG{n}{weight\PYGZus{}decay}\PYG{o}{=}\PYG{n}{WEIGHT\PYGZus{}DECAY}\PYG{p}{,}
+\PYG{p}{)}
+\PYG{c+c1}{\PYGZsh{} primele 5 epoci}
+\PYG{k}{for} \PYG{n}{epoch} \PYG{o+ow}{in} \PYG{n+nb}{range}\PYG{p}{(}\PYG{l+m+mi}{1}\PYG{p}{,} \PYG{n}{FREEZE\PYGZus{}EPOCHS} \PYG{o}{+} \PYG{l+m+mi}{1}\PYG{p}{):}
+    \PYG{n}{train\PYGZus{}one\PYGZus{}epoch}\PYG{p}{(}\PYG{n}{model}\PYG{p}{,} \PYG{n}{train\PYGZus{}loader}\PYG{p}{,} \PYG{n}{criterion}\PYG{p}{,} \PYG{n}{optimizer}\PYG{p}{)}
+    \PYG{n}{metrics} \PYG{o}{=} \PYG{n}{validate}\PYG{p}{(}\PYG{n}{model}\PYG{p}{,} \PYG{n}{val\PYGZus{}loader}\PYG{p}{,} \PYG{n}{criterion}\PYG{p}{)}
+    \PYG{c+c1}{\PYGZsh{} checkpoint pe cel mai bun macro\PYGZhy{}F1}
+    \PYG{n}{save\PYGZus{}best\PYGZus{}and\PYGZus{}last}\PYG{p}{(}\PYG{n}{model}\PYG{p}{,} \PYG{n}{metrics}\PYG{p}{)}
+
+\PYG{c+c1}{\PYGZsh{} Faza 2: ajustare fina completa, cu rate de invatare diferentiate}
+\PYG{n}{model}\PYG{o}{.}\PYG{n}{unfreeze\PYGZus{}backbone}\PYG{p}{()}
+\PYG{n}{param\PYGZus{}groups} \PYG{o}{=} \PYG{n}{model}\PYG{o}{.}\PYG{n}{get\PYGZus{}optimizer\PYGZus{}param\PYGZus{}groups}\PYG{p}{(}
+    \PYG{c+c1}{\PYGZsh{} backbone: LR de 10x mai mic decat capul}
+    \PYG{n}{lr}\PYG{o}{=}\PYG{n}{LR}\PYG{p}{,} \PYG{n}{lr\PYGZus{}backbone\PYGZus{}factor}\PYG{o}{=}\PYG{l+m+mf}{0.1}\PYG{p}{,}
+\PYG{p}{)}
+\PYG{n}{optimizer} \PYG{o}{=} \PYG{n}{AdamW}\PYG{p}{(}\PYG{n}{param\PYGZus{}groups}\PYG{p}{,} \PYG{n}{weight\PYGZus{}decay}\PYG{o}{=}\PYG{n}{WEIGHT\PYGZus{}DECAY}\PYG{p}{)}
+\PYG{c+c1}{\PYGZsh{} 10x la 10 epoci}
+\PYG{n}{scheduler} \PYG{o}{=} \PYG{n}{StepLR}\PYG{p}{(}\PYG{n}{optimizer}\PYG{p}{,} \PYG{n}{step\PYGZus{}size}\PYG{o}{=}\PYG{n}{LR\PYGZus{}STEP\PYGZus{}SIZE}\PYG{p}{,} \PYG{n}{gamma}\PYG{o}{=}\PYG{n}{LR\PYGZus{}GAMMA}\PYG{p}{)}
+
+\PYG{k}{for} \PYG{n}{epoch} \PYG{o+ow}{in} \PYG{n+nb}{range}\PYG{p}{(}\PYG{n}{FREEZE\PYGZus{}EPOCHS} \PYG{o}{+} \PYG{l+m+mi}{1}\PYG{p}{,} \PYG{n}{EPOCHS} \PYG{o}{+} \PYG{l+m+mi}{1}\PYG{p}{):}
+    \PYG{n}{train\PYGZus{}one\PYGZus{}epoch}\PYG{p}{(}\PYG{n}{model}\PYG{p}{,} \PYG{n}{train\PYGZus{}loader}\PYG{p}{,} \PYG{n}{criterion}\PYG{p}{,} \PYG{n}{optimizer}\PYG{p}{)}
+    \PYG{n}{metrics} \PYG{o}{=} \PYG{n}{validate}\PYG{p}{(}\PYG{n}{model}\PYG{p}{,} \PYG{n}{val\PYGZus{}loader}\PYG{p}{,} \PYG{n}{criterion}\PYG{p}{)}
+    \PYG{n}{scheduler}\PYG{o}{.}\PYG{n}{step}\PYG{p}{()}
+    \PYG{n}{save\PYGZus{}best\PYGZus{}and\PYGZus{}last}\PYG{p}{(}\PYG{n}{model}\PYG{p}{,} \PYG{n}{metrics}\PYG{p}{)}
+    \PYG{c+c1}{\PYGZsh{} oprire timpurie pe macro\PYGZhy{}F1}
+    \PYG{k}{if} \PYG{n}{early\PYGZus{}stopping}\PYG{p}{(}\PYG{n}{metrics}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}macro\PYGZus{}f1\PYGZdq{}}\PYG{p}{]):}
+        \PYG{k}{break}
+\end{Verbatim}

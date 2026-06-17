@@ -1,0 +1,42 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{c+c1}{\PYGZsh{} Thread 7 (fuziune): structuri locale, indexate pe frame\PYGZus{}id}
+\PYG{n}{pending} \PYG{o}{=} \PYG{p}{\PYGZob{}}\PYG{l+s+s2}{\PYGZdq{}frames\PYGZdq{}}\PYG{p}{:} \PYG{p}{\PYGZob{}\PYGZcb{},} \PYG{l+s+s2}{\PYGZdq{}face\PYGZdq{}}\PYG{p}{:} \PYG{p}{\PYGZob{}\PYGZcb{},} \PYG{l+s+s2}{\PYGZdq{}plate\PYGZdq{}}\PYG{p}{:} \PYG{p}{\PYGZob{}\PYGZcb{},}
+           \PYG{l+s+s2}{\PYGZdq{}fire\PYGZdq{}}\PYG{p}{:} \PYG{p}{\PYGZob{}\PYGZcb{},} \PYG{l+s+s2}{\PYGZdq{}har\PYGZdq{}}\PYG{p}{:} \PYG{p}{\PYGZob{}\PYGZcb{},} \PYG{l+s+s2}{\PYGZdq{}weapon\PYGZdq{}}\PYG{p}{:} \PYG{p}{\PYGZob{}\PYGZcb{}\PYGZcb{}}
+
+\PYG{k}{while} \PYG{k+kc}{True}\PYG{p}{:}
+    \PYG{c+c1}{\PYGZsh{} 1. Goleste neblocant toate cozile de iesire in structurile locale}
+    \PYG{c+c1}{\PYGZsh{} (camera\PYGZus{}id, frame)}
+    \PYG{n}{drain}\PYG{p}{(}\PYG{n}{raw\PYGZus{}frame\PYGZus{}queue}\PYG{p}{,} \PYG{n}{into}\PYG{o}{=}\PYG{n}{pending}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}frames\PYGZdq{}}\PYG{p}{])}
+    \PYG{k}{if} \PYG{n}{face\PYGZus{}enabled}\PYG{p}{:}   \PYG{n}{drain}\PYG{p}{(}\PYG{n}{face\PYGZus{}results\PYGZus{}queue}\PYG{p}{,}   \PYG{n}{into}\PYG{o}{=}\PYG{n}{pending}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}face\PYGZdq{}}\PYG{p}{])}
+    \PYG{k}{if} \PYG{n}{plate\PYGZus{}enabled}\PYG{p}{:}  \PYG{n}{drain}\PYG{p}{(}\PYG{n}{plate\PYGZus{}results\PYGZus{}queue}\PYG{p}{,}  \PYG{n}{into}\PYG{o}{=}\PYG{n}{pending}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}plate\PYGZdq{}}\PYG{p}{])}
+    \PYG{k}{if} \PYG{n}{fire\PYGZus{}enabled}\PYG{p}{:}   \PYG{n}{drain}\PYG{p}{(}\PYG{n}{fire\PYGZus{}results\PYGZus{}queue}\PYG{p}{,}   \PYG{n}{into}\PYG{o}{=}\PYG{n}{pending}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}fire\PYGZdq{}}\PYG{p}{])}
+    \PYG{k}{if} \PYG{n}{har\PYGZus{}enabled}\PYG{p}{:}    \PYG{n}{drain}\PYG{p}{(}\PYG{n}{har\PYGZus{}results\PYGZus{}queue}\PYG{p}{,}    \PYG{n}{into}\PYG{o}{=}\PYG{n}{pending}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}har\PYGZdq{}}\PYG{p}{])}
+    \PYG{k}{if} \PYG{n}{weapon\PYGZus{}enabled}\PYG{p}{:} \PYG{n}{drain}\PYG{p}{(}\PYG{n}{weapon\PYGZus{}results\PYGZus{}queue}\PYG{p}{,} \PYG{n}{into}\PYG{o}{=}\PYG{n}{pending}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}weapon\PYGZdq{}}\PYG{p}{])}
+
+    \PYG{c+c1}{\PYGZsh{} 2. Incearca sa asambleze fiecare cadru pentru care exista imaginea bruta}
+    \PYG{k}{for} \PYG{n}{frame\PYGZus{}id} \PYG{o+ow}{in} \PYG{n+nb}{list}\PYG{p}{(}\PYG{n}{pending}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}frames\PYGZdq{}}\PYG{p}{]):}
+        \PYG{c+c1}{\PYGZsh{} asamblare fortata}
+        \PYG{n}{timeout} \PYG{o}{=} \PYG{n}{is\PYGZus{}frame\PYGZus{}too\PYGZus{}old}\PYG{p}{(}\PYG{n}{frame\PYGZus{}id}\PYG{p}{,} \PYG{n}{max\PYGZus{}age}\PYG{o}{=}\PYG{l+m+mi}{60}\PYG{p}{)}
+
+        \PYG{c+c1}{\PYGZsh{} Module esentiale: gata SAU expirat; foc/HAR/arme sunt optionale}
+        \PYG{n}{ready} \PYG{o}{=} \PYG{k+kc}{True}
+        \PYG{k}{if} \PYG{n}{face\PYGZus{}enabled}\PYG{p}{:}  \PYG{n}{ready} \PYG{o}{=} \PYG{n}{ready} \PYG{o+ow}{and} \PYG{p}{(}\PYG{n}{frame\PYGZus{}id} \PYG{o+ow}{in} \PYG{n}{pending}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}face\PYGZdq{}}\PYG{p}{]}  \PYG{o+ow}{or} \PYG{n}{timeout}\PYG{p}{)}
+        \PYG{k}{if} \PYG{n}{plate\PYGZus{}enabled}\PYG{p}{:} \PYG{n}{ready} \PYG{o}{=} \PYG{n}{ready} \PYG{o+ow}{and} \PYG{p}{(}\PYG{n}{frame\PYGZus{}id} \PYG{o+ow}{in} \PYG{n}{pending}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}plate\PYGZdq{}}\PYG{p}{]} \PYG{o+ow}{or} \PYG{n}{timeout}\PYG{p}{)}
+        \PYG{k}{if} \PYG{o+ow}{not} \PYG{p}{(}\PYG{n}{face\PYGZus{}enabled} \PYG{o+ow}{or} \PYG{n}{plate\PYGZus{}enabled}\PYG{p}{):}
+            \PYG{n}{ready} \PYG{o}{=} \PYG{k+kc}{True}
+        \PYG{k}{if} \PYG{o+ow}{not} \PYG{n}{ready}\PYG{p}{:}
+            \PYG{c+c1}{\PYGZsh{} mai asteapta acest cadru}
+            \PYG{k}{continue}
+
+        \PYG{n}{camera\PYGZus{}id}\PYG{p}{,} \PYG{n}{final\PYGZus{}frame} \PYG{o}{=} \PYG{n}{pending}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}frames\PYGZdq{}}\PYG{p}{]}\PYG{o}{.}\PYG{n}{pop}\PYG{p}{(}\PYG{n}{frame\PYGZus{}id}\PYG{p}{)}
+
+        \PYG{c+c1}{\PYGZsh{} 3. Suprapune rezultatul disponibil de la fiecare detector (optional)}
+        \PYG{k}{for} \PYG{n}{det} \PYG{o+ow}{in} \PYG{p}{(}\PYG{l+s+s2}{\PYGZdq{}face\PYGZdq{}}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}plate\PYGZdq{}}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}fire\PYGZdq{}}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}har\PYGZdq{}}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}weapon\PYGZdq{}}\PYG{p}{):}
+            \PYG{k}{if} \PYG{n}{frame\PYGZus{}id} \PYG{o+ow}{in} \PYG{n}{pending}\PYG{p}{[}\PYG{n}{det}\PYG{p}{]:}
+                \PYG{n}{final\PYGZus{}frame} \PYG{o}{=} \PYG{n}{draw}\PYG{p}{(}\PYG{n}{det}\PYG{p}{,} \PYG{n}{final\PYGZus{}frame}\PYG{p}{,} \PYG{n}{pending}\PYG{p}{[}\PYG{n}{det}\PYG{p}{]}\PYG{o}{.}\PYG{n}{pop}\PYG{p}{(}\PYG{n}{frame\PYGZus{}id}\PYG{p}{))}
+
+        \PYG{c+c1}{\PYGZsh{} vezi logica de alarmare}
+        \PYG{n}{create\PYGZus{}alarms\PYGZus{}and\PYGZus{}logs}\PYG{p}{(}\PYG{n}{camera\PYGZus{}id}\PYG{p}{,} \PYG{n}{final\PYGZus{}frame}\PYG{p}{)}
+        \PYG{c+c1}{\PYGZsh{} catre clientii WebSocket}
+        \PYG{n}{broadcast\PYGZus{}frame}\PYG{p}{(}\PYG{n}{camera\PYGZus{}id}\PYG{p}{,} \PYG{n}{final\PYGZus{}frame}\PYG{p}{)}
+\end{Verbatim}

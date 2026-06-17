@@ -1,0 +1,41 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k}{def} \PYG{n+nf}{update}\PYG{p}{(}\PYG{n}{bbox}\PYG{p}{,} \PYG{n}{text}\PYG{p}{,} \PYG{n}{conf}\PYG{p}{):}
+    \PYG{c+c1}{\PYGZsh{} Asociaza detectia cu un track existent prin IoU (prag 0.3)}
+    \PYG{n}{best\PYGZus{}id}\PYG{p}{,} \PYG{n}{best\PYGZus{}iou} \PYG{o}{=} \PYG{k+kc}{None}\PYG{p}{,} \PYG{n}{IOU\PYGZus{}THRESHOLD}
+    \PYG{k}{for} \PYG{n}{tid}\PYG{p}{,} \PYG{n}{t} \PYG{o+ow}{in} \PYG{n}{tracks}\PYG{o}{.}\PYG{n}{items}\PYG{p}{():}
+        \PYG{n}{i} \PYG{o}{=} \PYG{n}{iou}\PYG{p}{(}\PYG{n}{bbox}\PYG{p}{,} \PYG{n}{t}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}bbox\PYGZdq{}}\PYG{p}{])}
+        \PYG{k}{if} \PYG{n}{i} \PYG{o}{\PYGZgt{}} \PYG{n}{best\PYGZus{}iou}\PYG{p}{:}
+            \PYG{n}{best\PYGZus{}id}\PYG{p}{,} \PYG{n}{best\PYGZus{}iou} \PYG{o}{=} \PYG{n}{tid}\PYG{p}{,} \PYG{n}{i}
+
+    \PYG{c+c1}{\PYGZsh{} niciun track: creeaza unul nou}
+    \PYG{k}{if} \PYG{n}{best\PYGZus{}id} \PYG{o+ow}{is} \PYG{k+kc}{None}\PYG{p}{:}
+        \PYG{n}{best\PYGZus{}id} \PYG{o}{=} \PYG{n}{next\PYGZus{}id}\PYG{p}{()}
+        \PYG{n}{tracks}\PYG{p}{[}\PYG{n}{best\PYGZus{}id}\PYG{p}{]} \PYG{o}{=} \PYG{p}{\PYGZob{}}\PYG{l+s+s2}{\PYGZdq{}bbox\PYGZdq{}}\PYG{p}{:} \PYG{n}{bbox}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}age\PYGZdq{}}\PYG{p}{:} \PYG{l+m+mi}{0}\PYG{p}{,}
+                           \PYG{c+c1}{\PYGZsh{} ultimele 10 citiri}
+                           \PYG{l+s+s2}{\PYGZdq{}readings\PYGZdq{}}\PYG{p}{:} \PYG{n}{deque}\PYG{p}{(}\PYG{n}{maxlen}\PYG{o}{=}\PYG{n}{HISTORY}\PYG{p}{),}
+                           \PYG{l+s+s2}{\PYGZdq{}emitted\PYGZdq{}}\PYG{p}{:} \PYG{k+kc}{None}\PYG{p}{,} \PYG{l+s+s2}{\PYGZdq{}emitted\PYGZus{}conf\PYGZdq{}}\PYG{p}{:} \PYG{l+m+mf}{0.0}\PYG{p}{\PYGZcb{}}
+
+    \PYG{n}{t} \PYG{o}{=} \PYG{n}{tracks}\PYG{p}{[}\PYG{n}{best\PYGZus{}id}\PYG{p}{]}
+    \PYG{c+c1}{\PYGZsh{} reseteaza contorul de inactivitate}
+    \PYG{n}{t}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}bbox\PYGZdq{}}\PYG{p}{],} \PYG{n}{t}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}age\PYGZdq{}}\PYG{p}{]} \PYG{o}{=} \PYG{n}{bbox}\PYG{p}{,} \PYG{l+m+mi}{0}
+
+    \PYG{c+c1}{\PYGZsh{} Pastreaza citirea doar daca e nevida, conf \PYGZgt{}= 0.4 SI respecta formatul RO}
+    \PYG{k}{if} \PYG{n}{text} \PYG{o+ow}{and} \PYG{n}{conf} \PYG{o}{\PYGZgt{}=} \PYG{l+m+mf}{0.4} \PYG{o+ow}{and} \PYG{n}{ROMANIAN\PYGZus{}PLATE\PYGZus{}RE}\PYG{o}{.}\PYG{n}{match}\PYG{p}{(}\PYG{n}{text}\PYG{p}{):}
+        \PYG{n}{t}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}readings\PYGZdq{}}\PYG{p}{]}\PYG{o}{.}\PYG{n}{append}\PYG{p}{((}\PYG{n}{text}\PYG{p}{,} \PYG{n}{conf}\PYG{p}{))}
+
+    \PYG{c+c1}{\PYGZsh{} Vot majoritar dupa cel putin min\PYGZus{}votes (3) citiri valide}
+    \PYG{k}{if} \PYG{n+nb}{len}\PYG{p}{(}\PYG{n}{t}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}readings\PYGZdq{}}\PYG{p}{])} \PYG{o}{\PYGZgt{}=} \PYG{n}{MIN\PYGZus{}VOTES}\PYG{p}{:}
+        \PYG{n}{scores} \PYG{o}{=} \PYG{n}{Counter}\PYG{p}{()}
+        \PYG{k}{for} \PYG{n}{txt}\PYG{p}{,} \PYG{n}{c} \PYG{o+ow}{in} \PYG{n}{t}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}readings\PYGZdq{}}\PYG{p}{]:}
+            \PYG{c+c1}{\PYGZsh{} cumuleaza scorurile de confidenta}
+            \PYG{n}{scores}\PYG{p}{[}\PYG{n}{txt}\PYG{p}{]} \PYG{o}{+=} \PYG{n}{c}
+        \PYG{n}{best\PYGZus{}text}\PYG{p}{,} \PYG{n}{total\PYGZus{}conf} \PYG{o}{=} \PYG{n}{scores}\PYG{o}{.}\PYG{n}{most\PYGZus{}common}\PYG{p}{(}\PYG{l+m+mi}{1}\PYG{p}{)[}\PYG{l+m+mi}{0}\PYG{p}{]}
+        \PYG{n}{votes} \PYG{o}{=} \PYG{n+nb}{sum}\PYG{p}{(}\PYG{l+m+mi}{1} \PYG{k}{for} \PYG{n}{txt}\PYG{p}{,} \PYG{n}{\PYGZus{}} \PYG{o+ow}{in} \PYG{n}{t}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}readings\PYGZdq{}}\PYG{p}{]} \PYG{k}{if} \PYG{n}{txt} \PYG{o}{==} \PYG{n}{best\PYGZus{}text}\PYG{p}{)}
+        \PYG{k}{if} \PYG{n}{votes} \PYG{o}{\PYGZgt{}=} \PYG{n}{MIN\PYGZus{}VOTES}\PYG{p}{:}
+            \PYG{c+c1}{\PYGZsh{} rezultat consolidat (stabilizat)}
+            \PYG{n}{t}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}emitted\PYGZdq{}}\PYG{p}{]} \PYG{o}{=} \PYG{n}{best\PYGZus{}text}
+            \PYG{c+c1}{\PYGZsh{} media confidentei sustinatoare}
+            \PYG{n}{t}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}emitted\PYGZus{}conf\PYGZdq{}}\PYG{p}{]} \PYG{o}{=} \PYG{n}{total\PYGZus{}conf} \PYG{o}{/} \PYG{n}{votes}
+
+    \PYG{k}{return} \PYG{n}{t}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}emitted\PYGZdq{}}\PYG{p}{],} \PYG{n}{t}\PYG{p}{[}\PYG{l+s+s2}{\PYGZdq{}emitted\PYGZus{}conf\PYGZdq{}}\PYG{p}{]}
+\end{Verbatim}
