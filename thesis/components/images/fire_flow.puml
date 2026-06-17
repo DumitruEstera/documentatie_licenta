@@ -1,0 +1,83 @@
+@startuml fire_flow
+' Fluxul modulului de detecție foc/fum: cascada celor cinci filtre + flag-uri
+' (Cap. 5: sec:modul_foc_fum)
+
+skinparam shadowing false
+skinparam backgroundColor transparent
+skinparam defaultFontName Serif
+skinparam defaultFontSize 13
+skinparam ArrowColor #555555
+skinparam ArrowFontColor #333333
+
+skinparam activity {
+  BorderColor #333333
+  BackgroundColor #EAF1FB
+  FontColor #111111
+  DiamondBorderColor #5A6B8C
+  DiamondBackgroundColor #FFF3E0
+  DiamondFontColor #111111
+  StartColor #5A6B8C
+  EndColor #5A6B8C
+  BarColor #5A6B8C
+}
+
+skinparam note {
+  BorderColor #B0792C
+  BackgroundColor #FFF3E0
+  FontColor #111111
+  FontSize 11
+}
+
+start
+:**Cadru video**;
+
+:**Detecție YOLOv10** (clase ""fire"" / ""smoke"")\nprag de încredere diferit pentru fiecare clasă\n→ detecții candidate;
+
+partition "pentru fiecare detecție candidată (cascadă de 5 filtre)" {
+
+  if (**Filtru 1** — încredere ≥ pragul clasei ?\n(""fire"" 0,40 / ""smoke"" 0,55)) then (nu)
+    #ECECEC:Detecție respinsă;
+    kill
+  else (da)
+  endif
+
+  if (**Filtru 2** — arie relativă în [0,3%, 85%] ?) then (nu)
+    #ECECEC:Detecție respinsă;
+    kill
+  else (da)
+  endif
+
+  if (**Filtru 3** — profil cromatic HSV plauzibil ?) then (nu)
+    #ECECEC:Detecție respinsă;
+    kill
+  else (da)
+  endif
+
+  :**Filtru 4 — confirmare temporală**\nasociază detecția cu cele din cadrele anterioare\n(suprapunere ≥ 0,3, aceeași clasă)\n→ numără cadrele consecutive;
+  note right
+    Detecțiile efemere (sclipiri, artefacte
+    de compresie) apar izolat și nu ating
+    pragul de persistență.
+  end note
+
+  if (≥ 6 cadre consecutive ?) then (nu)
+    #FFF3E0:Detecție în curs de confirmare\n(urmărită, dar **neafișată**);
+    kill
+  else (da)
+  endif
+
+  :Detecție **confirmată** — desenată pe cadru;
+
+  :**Filtru 5 — interval minim între alerte**\npe aceeași locație\n(poziția este aproximată, astfel încât micile\nfluctuații sunt tratate ca aceeași sursă);
+
+  if (≥ 3 s de la ultima alertă\npe aceeași locație ?) then (da)
+    #FDE0E0:**Alertă** — chenar îngroșat + „FIRE ALERT"\n→ alarmă (bază de date + WebSocket);
+  else (nu)
+    #E8F5E9:Doar afișare\n(focar deja semnalat, fără alarmă nouă);
+  endif
+}
+
+:Detecțiile confirmate sunt transmise\nfirului de fuziune;
+stop
+
+@enduml

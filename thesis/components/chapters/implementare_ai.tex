@@ -570,11 +570,14 @@ Modulul de detecție a focului și a fumului identifică în fluxul video apari�
 
 Provocarea principală a acestui modul nu constă în detecția propriu-zisă, ci în controlul strict al rezultatelor fals pozitive: focul și, în special, fumul, reprezintă categorii vizuale cu un grad ridicat de ambiguitate (fiind predispuse la confuzii cu pereți gri, formațiuni noroase, abur, reflexii calde sau lumina apusului). O detecție primară obținută de la un model YOLO, dacă ar fi utilizată direct pentru declanșarea unei alarme, ar genera un volum inacceptabil de avertizări false. Din acest motiv, implementarea suprapune peste modelul de bază un \textit{mecanism de filtrare structurat pe cinci niveluri}, care transformă detecțiile candidate în alerte finale exclusiv după ce acestea îndeplinesc, în ordine succesivă, condițiile tuturor filtrelor. Subcapitolele următoare descriu modelul de bază, cele cinci etape de filtrare și, în final, semnificația indicatorilor de stare \inlinecode{confirmed} și \inlinecode{alert} asociați fiecărei detecții.
 
-% [DIAGRAMĂ SUGERATĂ] O diagramă în „cascadă'' (funnel) ar ilustra clar pipeline-ul:
-% detecții brute YOLOv10 → [N1] prag de încredere per clasă → [N2] filtru de
-% dimensiune → [N3] verificare cromatică HSV → [N4] confirmare temporală IoU
-% (≥6 cadre) → [N5] cooldown de alertă pe locație → alertă. La fiecare nivel ar
-% apărea ce detecții sunt eliminate.
+Figura~\ref{fig:fire_flow} ilustrează acest mecanism sub forma unei cascade de filtrare: fiecare detecție candidată furnizată de YOLOv10 traversează, în ordine, cele cinci niveluri, fiind eliminată de îndată ce nu satisface un criteriu. Diagrama evidențiază ce categorie de detecții este respinsă la fiecare nivel, precum și derivarea finală a celor doi indicatori de stare -- \inlinecode{confirmed} (eveniment real, afișat pe cadru) și \inlinecode{alert} (moment de declanșare a alarmei). Subcapitolele care urmează descriu modelul de bază și fiecare dintre cele cinci filtre.
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[height=0.9\textheight]{fire_flow.pdf}
+	\caption{\textbf{Cascada de filtrare foc/fum.} Detecțiile YOLOv10 parcurg cinci etape: încredere, dimensiune, analiză HSV, agregare temporală IoU și \textit{cooldown}. Rezultatele sunt progresiv respinse (gri), în așteptare (portocaliu), confirmate vizual (verde) sau marcate ca alertă (roșu). Indicatorii \texttt{confirmed} și \texttt{alert} separă starea validată de evenimentul declanșat.}
+	\label{fig:fire_flow}
+\end{figure}
 
 \subsection{Modelul YOLOv10 pre-antrenat}
 \label{subsec:yolov10_preantrenat}
