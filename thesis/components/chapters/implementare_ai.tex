@@ -166,6 +166,35 @@ Vizual, fețele cunoscute sunt marcate cu un chenar verde și eticheta
 \inlinecode{nume} \inlinecode{(încredere)}, iar cele necunoscute cu un chenar portocaliu și eticheta
 \inlinecode{Unknown}, prin metoda \inlinecode{\_draw\_face()}.
 
+Listing-ul~\ref{lst:matching_facial} prezintă strategia de asociere a identității, exact așa cum este implementată în metoda \inlinecode{\_match\_embedding()}: identificarea celui mai apropiat vecin în indexul FAISS, respingerea candidaților care depășesc pragul distanței L2, conversia distanței în similaritate cosinus și stabilirea identității. Această secvență este urmată de un filtru suplimentar bazat pe parametrul \inlinecode{min\_} \linebreak \inlinecode{confidence}, aplicat la nivelul funcției \inlinecode{process\_frame()}.
+
+\begin{lstlisting}[caption={Strategia de matching facial (\texttt{\_match\_embedding} din \texttt{facial\_recognition\_system.py}).},label={lst:matching_facial}]
+def match_embedding(embedding):                 # vector L2-normalizat, 512-d
+    # Cautare nemarginita: inregistram distanta reala pentru calibrare,
+    # apoi aplicam noi pragul de decizie configurat
+    raw = faiss_index.search(embedding, k=1, threshold=float("inf"))
+    if not raw:
+        return None                             # index gol, niciun candidat
+
+    person_id, distance = raw[0]                # cel mai apropiat vecin (distanta L2)
+
+    if distance >= recognition_threshold:       # 1.0  (echivalent cos_sim = 0.5)
+        return None                             # fata necunoscuta
+
+    # Vectori L2-normalizati: L2^2 = 2 - 2*cos_sim  =>  cos_sim = 1 - L2^2/2
+    cos_sim = 1.0 - distance ** 2 / 2.0
+    confidence = max(0.0, min(1.0, cos_sim))    # marginit la [0, 1]
+
+    person = db.get_person_by_id(person_id)
+    if not person:
+        return None
+    return {"person_id": person_id, "name": person["name"],
+            "confidence": confidence, "distance": distance}
+
+# In process_frame() o fata e considerata cunoscuta doar daca exista o
+# potrivire SI confidence > min_confidence (0.4); altfel ramane "Unknown".
+\end{lstlisting}
+
 \subsection{Optimizarea: omiterea analizei demografice pentru fețele cunoscute}
 \label{subsec:optimizare_demografica}
 
@@ -373,6 +402,44 @@ Fiecare traiectorie menține un istoric al citirilor recente, stocat într-o str
 
 Determinarea rezultatului final pentru o traiectorie se realizează printr-un proces de \textit{selecție majoritară} aplicat pe istoricul citirilor valide. Această logică de agregare, integrată în metoda \inlinecode{PlateTracker.update()}, se declanșează exclusiv după ce instanța de urmărire a înregistrat un minim de \inlinecode{min\_votes=3} citiri. Datele candidate sunt centralizate utilizând o structură de tip \inlinecode{Counter}, în cadrul căreia fiecare text cumulează suma scorurilor de confidență aferente. Șirul de caractere cu scorul total maxim este desemnat câștigător; dacă numărul recunoașterilor individuale care îl susțin atinge pragul \inlinecode{min\_votes}, acesta devine rezultatul consolidat (starea \inlinecode{emitted}) al traiectoriei, având un scor de confidență final calculat ca media aritmetică a scorurilor individuale.
 
+Listing-ul~\ref{lst:plate_vote} prezintă metoda \inlinecode{PlateTracker.update()}, care reunește cele trei etape descrise mai sus: asocierea prin IoU cu o traiectorie, filtrarea citirilor după formatul românesc și votul majoritar pe istoric.
+
+\begin{lstlisting}[caption={Votarea temporală a plăcuțelor (\texttt{PlateTracker.update} din \texttt{license\_plate\_recognition\_system.py}).},label={lst:plate_vote}]
+def update(bbox, text, conf):
+    # Asociaza detectia cu un track existent prin IoU (prag 0.3)
+    best_id, best_iou = None, IOU_THRESHOLD
+    for tid, t in tracks.items():
+        i = iou(bbox, t["bbox"])
+        if i > best_iou:
+            best_id, best_iou = tid, i
+
+    if best_id is None:                          # niciun track: creeaza unul nou
+        best_id = next_id()
+        tracks[best_id] = {"bbox": bbox, "age": 0,
+                           "readings": deque(maxlen=HISTORY),   # ultimele 10 citiri
+                           "emitted": None, "emitted_conf": 0.0}
+
+    t = tracks[best_id]
+    t["bbox"], t["age"] = bbox, 0                 # reseteaza contorul de inactivitate
+
+    # Pastreaza citirea doar daca e nevida, conf >= 0.4 SI respecta formatul RO
+    if text and conf >= 0.4 and ROMANIAN_PLATE_RE.match(text):
+        t["readings"].append((text, conf))
+
+    # Vot majoritar dupa cel putin min_votes (3) citiri valide
+    if len(t["readings"]) >= MIN_VOTES:
+        scores = Counter()
+        for txt, c in t["readings"]:
+            scores[txt] += c                      # cumuleaza scorurile de confidenta
+        best_text, total_conf = scores.most_common(1)[0]
+        votes = sum(1 for txt, _ in t["readings"] if txt == best_text)
+        if votes >= MIN_VOTES:
+            t["emitted"] = best_text              # rezultat consolidat (stabilizat)
+            t["emitted_conf"] = total_conf / votes  # media confidentei sustinatoare
+
+    return t["emitted"], t["emitted_conf"]
+\end{lstlisting}
+
 Interogarea bazei de date este inițiată strict după ce o traiectorie generează o citire stabilizată: funcția \inlinecode{lookup\_owner\_by\_plate()} verifică existența unui proprietar, iar validarea unei înregistrări atestă statutul de vehicul autorizat. Plăcuțele aflate în stadiu de evaluare sau care nu figurează în sistem sunt etichetate drept \inlinecode{UNKNOWN} (sau \inlinecode{"Unknown car"}). La nivelul interfeței vizuale, vehiculele autorizate sunt delimitate printr-o casetă verde, în timp ce vehiculele neautorizate sau necunoscute sunt marcate cu roșu. Acest mecanism de agregare temporală garantează că o plăcuță este validată și supusă verificării doar atunci când există un consens pe mai multe cadre consecutive asupra aceluiași text, eliminând astfel cu succes erorile de citire tranzitorii.
 \section{Modulul de detecție foc și fum}
 \label{sec:modul_foc_fum}
@@ -398,6 +465,39 @@ La nivelul fiecărui cadru, metoda \inlinecode{process\_frame()} execută funcț
 \label{subsec:pipeline_filtrare}
 
 Fiecare rezultat candidat furnizat de modelul YOLOv10 parcurge, în mod secvențial, cinci niveluri de filtrare. Pentru ca o detecție să fie validată și transformată în alertă, aceasta trebuie să îndeplinească cerințele tuturor celor cinci etape; neîndeplinirea criteriilor la oricare dintre aceste niveluri atrage respingerea automată a detecției (sau, în cazul specific al filtrului temporal, reținerea acesteia în starea de detecție aflată în curs de confirmare). Sistemul menține o serie de statistici interne (precum \inlinecode{rejected\_by\_size}, \inlinecode{rejected\_by\_color} etc.) pentru a contoriza cu precizie numărul detecțiilor invalidate la nivelul fiecărui filtru.
+
+Listing-ul~\ref{lst:fire_pipeline} sintetizează cascada celor cinci filtre aplicată fiecărui candidat YOLOv10 în \inlinecode{process\_frame()}. Etapele 3, 4 și 5 sunt detaliate în subsecțiunile următoare, împreună cu Listing-urile~\ref{lst:fire_history} și~\ref{lst:fire_confirm}.
+
+\begin{lstlisting}[caption={Cascada celor cinci filtre aplicată fiecărui candidat (\texttt{process\_frame} din \texttt{fire\_detection\_system.py}).},label={lst:fire_pipeline}]
+for box in yolo_results.boxes:                  # candidati YOLOv10
+    x1, y1, x2, y2 = clamp_to_frame(box.xyxy)
+    class_name, conf = box.class_name, box.conf
+
+    # Filtru 1: prag de incredere diferentiat pe clasa (fire 0.40 / smoke 0.55)
+    if conf < CONF_THRESHOLDS[class_name]:
+        continue
+
+    # Filtru 2: plauzibilitate dimensionala (intre 0.3% si 85% din cadru)
+    area_ratio = (x2 - x1) * (y2 - y1) / frame_area
+    if not (MIN_AREA_RATIO <= area_ratio <= MAX_AREA_RATIO):
+        stats["rejected_by_size"] += 1
+        continue
+
+    # Filtru 3: verificare cromatica euristica in HSV
+    if not color_plausible(frame[y1:y2, x1:x2], class_name):
+        stats["rejected_by_color"] += 1
+        continue
+
+    # Filtru 4: confirmare temporala prin tracking IoU
+    consecutive = update_frame_history(class_name, (x1, y1, x2, y2), matched_keys)
+    confirmed = consecutive >= MIN_CONSECUTIVE_FRAMES   # 6 cadre consecutive
+
+    # Filtru 5: cooldown de alerta pe locatie (3 s)
+    should_alert = confirmed and alert_cooldown_expired(class_name, x1, y1)
+
+    detections.append({"bbox": (x1, y1, x2, y2), "class": class_name,
+                       "confirmed": confirmed, "alert": should_alert})
+\end{lstlisting}
 
 \subsubsection{Praguri de încredere per clasă}
 \label{subsubsec:praguri_incredere}
@@ -430,6 +530,34 @@ Detecțiile care nu satisfac profilul cromatic specific clasei prezise sunt resp
 
 Cel de-al patrulea nivel de filtrare impune o condiție de persistență temporală: o detecție devine \textit{confirmată} exclusiv dacă este identificată în mod constant pe parcursul a cel puțin \inlinecode{6} cadre consecutive. Pentru a asigura trasabilitatea unei detecții între cadre succesive, metoda \inlinecode{\_update\_frame\_history()} corelează caseta de încadrare curentă cu înregistrările din istoricul temporal, utilizând ca metrică suprapunerea spațială (IoU $\geq 0{,}3$, calculată prin funcția \inlinecode{\_compute\_iou()}), cu obligativitatea apartenenței la aceeași clasă. În cazul identificării unei corespondențe, contorul de apariții consecutive al înregistrării este incrementat; în caz contrar, sistemul inițializează o intrare nouă, având contorul setat la valoarea 1. Instanțele care nu mai sunt detectate în cadrul analizat sunt invalidate și eliminate din istoric, întrerupând astfel continuitatea secvenței. Acest mecanism exclude cu succes detecțiile efemere (cum ar fi sclipirile luminoase de scurtă durată sau artefactele de compresie video), care apar izolat și nu pot indica prezența unui incendiu real.
 
+Listing-ul~\ref{lst:fire_history} detaliază mecanismul de corelare temporală implementat în metoda \inlinecode{\_update\_frame\_history()}: caseta de încadrare curentă este asociată cu o detecție din istoric pe baza metricii IoU (\textit{Intersection over Union}), fiind condiționată de apartenența la aceeași clasă. În cazul unei asocieri valide, contorul de apariții consecutive este incrementat; în caz contrar, sistemul inițializează o nouă intrare, având contorul setat la valoarea 1.
+
+\begin{lstlisting}[caption={Corelarea temporală a detecțiilor prin IoU (\texttt{\_update\_frame\_history} din \texttt{fire\_detection\_system.py}).},label={lst:fire_history}]
+def update_frame_history(class_name, bbox, matched_keys):
+    # Cauta in istoric caseta cu cea mai mare suprapunere (IoU), aceeasi clasa
+    best_key, best_iou = None, 0.0
+    for key, entry in frame_history.items():
+        if key in matched_keys or not key.startswith(class_name + "_"):
+            continue
+        iou = compute_iou(bbox, entry["bbox"])
+        if iou > best_iou:
+            best_iou, best_key = iou, key
+
+    if best_key is not None and best_iou >= IOU_MATCH_THRESHOLD:   # 0.3
+        frame_history[best_key]["count"] += 1                      # streak++
+        frame_history[best_key]["bbox"] = bbox
+        frame_history[best_key]["last_seen_frame"] = current_frame_number
+        matched_keys.add(best_key)
+        return frame_history[best_key]["count"]
+
+    # Nicio corespondenta: intrare noua, contor initializat la 1
+    new_key = f"{class_name}_{current_frame_number}_{id(bbox)}"
+    frame_history[new_key] = {"bbox": bbox, "count": 1,
+                              "last_seen_frame": current_frame_number}
+    matched_keys.add(new_key)
+    return 1
+\end{lstlisting}
+
 \subsubsection{Cooldown de alertă pe locație}
 \label{subsubsec:cooldown}
 
@@ -446,6 +574,31 @@ Fiecare predicție returnată de metoda \inlinecode{process\_frame()} este înso
 \end{itemize}
 
 Această decuplare a indicatorilor separă \textit{starea} sistemului (prezența validată a focului sau a fumului în cadrul curent) de \textit{evenimentul} de notificare (necesitatea declanșării imediate a unei alarme). Abordarea permite afișarea continuă a focarelor confirmate, eliminând totodată riscul generării unor alerte redundante.
+
+Listing-ul~\ref{lst:fire_confirm} ilustrează modul în care sunt evaluați cei doi indicatori în cadrul metodei \inlinecode{process\_frame()}, pentru o detecție care a trecut deja de cele trei filtre preliminare (nivel de încredere, dimensiune și validare HSV). Indicatorul \inlinecode{confirmed} este activat odată cu atingerea pragului de persistență temporală, în timp ce parametrul \inlinecode{alert} impune, suplimentar, respectarea unui interval de latență (\textit{cooldown}) asociat locației respective. La finalul prelucrării fiecărui cadru, intrările din istoric care nu au fost reconfirmate prin asocieri noi sunt eliminate, întrerupând astfel secvența aparițiilor consecutive.
+
+\begin{lstlisting}[caption={Derivarea indicatorilor \texttt{confirmed} și \texttt{alert} (\texttt{process\_frame} din \texttt{fire\_detection\_system.py}).},label={lst:fire_confirm}]
+# Detectie care a trecut filtrele 1-3 (incredere, dimensiune, HSV):
+consecutive = update_frame_history(class_name, (x1, y1, x2, y2), matched_keys)
+confirmed = consecutive >= MIN_CONSECUTIVE_FRAMES   # 6 cadre consecutive
+
+should_alert = False
+if confirmed:
+    # Cheie de locatie cuantizata, ca fluctuatiile mici sa fie aceeasi sursa
+    alert_key = f"{class_name}_{x1 // 40}_{y1 // 40}"
+    last = last_alert_time.get(alert_key)
+    if last is None or (now - last).total_seconds() > ALERT_COOLDOWN:   # 3 s
+        should_alert = True
+        last_alert_time[alert_key] = now
+
+detection["confirmed"] = confirmed   # eveniment real: se deseneaza pe cadru
+detection["alert"] = should_alert    # momentul de declansare a alarmei
+
+# La finalul cadrului: intrarile nevazute acum sunt sterse (streak intrerupt)
+for k in [k for k, v in frame_history.items()
+          if v["last_seen_frame"] < current_frame_number]:
+    del frame_history[k]
+\end{lstlisting}
 
 \section{Modulul de detecție a armelor (model ajustat fin propriu)}
 \label{sec:modul_arme}
@@ -748,6 +901,32 @@ corespunzător unei durate de \inlinecode{2.0} secunde. Aceste valori sunt fixat
 \inlinecode{configs/config.py} și trebuie respectate identic la inferență (în aplicație), altfel
 modelul ar primi intrări incompatibile cu cele pe care a fost antrenat.
 
+Listing-ul~\ref{lst:slowfast_pack} prezintă procedura de generare a intrărilor pentru arhitectura SlowFast, implementată în funcția \inlinecode{pack\_frames\_slowfast()}: din totalul de \inlinecode{T} cadre ale secvenței video se eșantionează uniform \inlinecode{8} indici pentru ramura Slow și \inlinecode{32} de indici pentru ramura Fast. Fiecare cadru extras este redimensionat la rezoluția de $224 \times 224$ pixeli și normalizat utilizând media și abaterea standard aferente setului de date Kinetics-400. Aceeași procedură de structurare a datelor este aplicată în mod identic și în etapa de inferență, prin intermediul metodei \inlinecode{har\_system.\_pack\_slowfast()}.
+
+\begin{lstlisting}[caption={Construcția perechii de intrări slow/fast (\texttt{pack\_frames\_slowfast} din \texttt{data/dataset.py}).},label={lst:slowfast_pack}]
+# T cadre (T, H, W, 3) -> pereche de tensori pentru cele doua cai SlowFast
+def pack_frames_slowfast(frames, num_slow=8, num_fast=32, crop_size=224):
+    T_total = frames.shape[0]
+    # Esantionare uniforma a indicilor de-a lungul clipului (2.0 s)
+    slow_idx = np.linspace(0, T_total - 1, num_slow, dtype=np.int64)   # 8 cadre
+    fast_idx = np.linspace(0, T_total - 1, num_fast, dtype=np.int64)   # 32 cadre
+    slow_tensor = frames_to_tensor(frames[slow_idx], crop_size)
+    fast_tensor = frames_to_tensor(frames[fast_idx], crop_size)
+    return [slow_tensor, fast_tensor]   # (3, 8, 224, 224) si (3, 32, 224, 224)
+
+def frames_to_tensor(frames, crop_size):
+    imgs = []
+    for f in frames:                                  # fiecare cadru (H, W, 3)
+        img = to_tensor(f).float() / 255.0            # (3, H, W), valori in [0, 1]
+        img = resize(img, [crop_size, crop_size])     # decupare spatiala 224x224
+        imgs.append(img)
+    tensor = torch.stack(imgs, dim=1)                 # (3, T, 224, 224)
+    # Normalizare cu media / deviatia standard Kinetics-400
+    mean = torch.tensor([0.45, 0.45, 0.45]).view(3, 1, 1, 1)
+    std  = torch.tensor([0.225, 0.225, 0.225]).view(3, 1, 1, 1)
+    return (tensor - mean) / std
+\end{lstlisting}
+
 \subsection{Parametrii de antrenare}
 \label{subsec:parametri_actiuni}
 
@@ -765,6 +944,37 @@ pre-antrenate:
     ori mai mică decât capul (\inlinecode{lr\_backbone\_factor=0.1}), pentru a-l ajusta fin fără a-l
     deteriora.
 \end{itemize}
+
+Listing-ul~\ref{lst:two_phase} prezintă structura de bază a celor două etape de antrenare din modulul \inlinecode{train.py}: în Faza 1, optimizatorul actualizează exclusiv parametrii straturilor finale de clasificare (capul rețelei), în timp ce în Faza 2, rețeaua de extracție a trăsăturilor (\textit{backbone-ul}) este deblocată și antrenată utilizând rate de învățare diferențiate. Acest proces este gestionat de un planificator de tip \inlinecode{StepLR} și include un mecanism de oprire timpurie (\textit{early stopping}) evaluat pe baza metricii \inlinecode{macro\_f1}.
+
+\begin{lstlisting}[caption={Ajustarea fină în două faze a modelului SlowFast (\texttt{train.py}).},label={lst:two_phase}]
+# Faza 1: backbone inghetat -- se antreneaza doar capul de clasificare
+model.freeze_backbone()                          # requires_grad = False pe backbone
+optimizer = AdamW(
+    filter(lambda p: p.requires_grad, model.parameters()),   # doar parametrii activi
+    lr=LR, weight_decay=WEIGHT_DECAY,
+)
+for epoch in range(1, FREEZE_EPOCHS + 1):        # primele 5 epoci
+    train_one_epoch(model, train_loader, criterion, optimizer)
+    metrics = validate(model, val_loader, criterion)
+    save_best_and_last(model, metrics)           # checkpoint pe cel mai bun macro-F1
+
+# Faza 2: ajustare fina completa, cu rate de invatare diferentiate
+model.unfreeze_backbone()
+param_groups = model.get_optimizer_param_groups(
+    lr=LR, lr_backbone_factor=0.1,               # backbone: LR de 10x mai mic decat capul
+)
+optimizer = AdamW(param_groups, weight_decay=WEIGHT_DECAY)
+scheduler = StepLR(optimizer, step_size=LR_STEP_SIZE, gamma=LR_GAMMA)  # 10x la 10 epoci
+
+for epoch in range(FREEZE_EPOCHS + 1, EPOCHS + 1):
+    train_one_epoch(model, train_loader, criterion, optimizer)
+    metrics = validate(model, val_loader, criterion)
+    scheduler.step()
+    save_best_and_last(model, metrics)
+    if early_stopping(metrics["macro_f1"]):      # oprire timpurie pe macro-F1
+        break
+\end{lstlisting}
 
 Alți parametri și tehnici folosite, conform \inlinecode{config.py} și \inlinecode{train.py}:
 
@@ -888,6 +1098,46 @@ Fiecare modul de inteligență artificială operează într-un fir de execuție 
 Firul de execuție responsabil de fuziunea datelor (Thread~7) gestionează procesul complex de recombinare a rezultatelor generate \textit{asincron}. De exemplu, modulul pentru identificarea plăcuțelor poate finaliza procesarea cadrului $N$ înainte ca modulul facial să termine cadrul $N-2$. Pentru a rezolva această asimetrie temporală, sistemul menține un dicționar, \inlinecode{pending\_results}, care include câte o structură de reținere pentru fiecare categorie de rezultat (\inlinecode{frames}, \inlinecode{face}, \inlinecode{plate}, \inlinecode{fire}, \inlinecode{har}, \inlinecode{weapon}), indexată pe baza identificatorului \inlinecode{frame\_id}. La fiecare iterație, acest fir extrage toate datele disponibile din cozile de ieșire, populând dicționarul, după care încearcă să \textit{agregheze} fiecare cadru pentru care a fost recepționată imaginea brută.
 
 Un cadru este validat pentru agregare în momentul în care au sosit rezultatele furnizate de modulele \textit{esențiale} activate (recunoașterea facială și a plăcuțelor). Rezultatele provenite de la modulele pentru foc, acțiuni și arme sunt tratate ca \textit{opționale}: acestea sunt integrate în imagine doar dacă sunt deja disponibile, fără ca absența lor să blocheze procesul de asamblare. Pentru a preveni stările de așteptare infinită cauzate de rezultate lipsă (de exemplu, pe fondul omiterii anterioare a unui cadru), este implementat un mecanism de limitare a așteptării (\textit{timeout}): dacă decalajul dintre \inlinecode{frame\_id}-ul curent și cel al cadrului evaluat depășește 60 de indici, cadrul este asamblat forțat utilizând exclusiv datele parțiale disponibile la acel moment. Adițional, o rutină de mentenanță (\inlinecode{\_cleanup\_old\_results()}) elimină periodic intrările cu o vechime mai mare de 90 de cadre, prevenind astfel creșterea necontrolată a dicționarului în caz de desincronizări severe.
+
+Listing-ul~\ref{lst:merging} prezintă ciclul de execuție al firului de fuziune și politica de selecție \emph{cel mai recent cadru disponibil}: la fiecare iterație, conținutul tuturor cozilor de ieșire este preluat într-o manieră non-blocantă în structurile locale (operațiune de tip \inlinecode{drain}). Ulterior, fiecare cadru ce conține imaginea brută este compus de îndată ce rezultatele modulelor esențiale sunt finalizate sau perioada de așteptare (\textit{timeout}) a expirat. Rezultatele detectoarelor opționale sunt suprapuse exclusiv dacă acestea se află deja la dispoziție în momentul asamblării.
+
+\begin{lstlisting}[caption={Firul de fuziune și politica \emph{ultimul cadru disponibil} (\texttt{merging\_thread} din \texttt{app.py}).},label={lst:merging}]
+# Thread 7 (fuziune): structuri locale, indexate pe frame_id
+pending = {"frames": {}, "face": {}, "plate": {},
+           "fire": {}, "har": {}, "weapon": {}}
+
+while True:
+    # 1. Goleste neblocant toate cozile de iesire in structurile locale
+    drain(raw_frame_queue, into=pending["frames"])         # (camera_id, frame)
+    if face_enabled:   drain(face_results_queue,   into=pending["face"])
+    if plate_enabled:  drain(plate_results_queue,  into=pending["plate"])
+    if fire_enabled:   drain(fire_results_queue,   into=pending["fire"])
+    if har_enabled:    drain(har_results_queue,    into=pending["har"])
+    if weapon_enabled: drain(weapon_results_queue, into=pending["weapon"])
+
+    # 2. Incearca sa asambleze fiecare cadru pentru care exista imaginea bruta
+    for frame_id in list(pending["frames"]):
+        timeout = is_frame_too_old(frame_id, max_age=60)   # asamblare fortata
+
+        # Module esentiale: gata SAU expirat; foc/HAR/arme sunt optionale
+        ready = True
+        if face_enabled:  ready = ready and (frame_id in pending["face"]  or timeout)
+        if plate_enabled: ready = ready and (frame_id in pending["plate"] or timeout)
+        if not (face_enabled or plate_enabled):
+            ready = True
+        if not ready:
+            continue                                       # mai asteapta acest cadru
+
+        camera_id, final_frame = pending["frames"].pop(frame_id)
+
+        # 3. Suprapune rezultatul disponibil de la fiecare detector (optional)
+        for det in ("face", "plate", "fire", "har", "weapon"):
+            if frame_id in pending[det]:
+                final_frame = draw(det, final_frame, pending[det].pop(frame_id))
+
+        create_alarms_and_logs(camera_id, final_frame)     # vezi logica de alarmare
+        broadcast_frame(camera_id, final_frame)            # catre clientii WebSocket
+\end{lstlisting}
 
 \subsection{Compunerea cadrului adnotat}
 \label{subsec:compunere}

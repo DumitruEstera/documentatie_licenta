@@ -886,6 +886,45 @@ O alarmă este creată prin metoda \texttt{\_create\_alarm\_if\_needed(camera\_i
     \item[Plăcuță neautorizată (tip \texttt{plate}).] Pentru orice rezultat ANPR cu citire OCR validă (numărul plăcuței diferit de \texttt{None}/\texttt{""}/\texttt{"UNKNOWN"}) care \emph{nu} este regăsit pe lista de plăcuțe autorizate, se creează o alarmă \texttt{plate} cu severitate \texttt{high} și descrierea \texttt{"Unauthorized vehicle <plate> detected (...\%)"}, deduplicată pe numărul plăcuței. Rezultatele ANPR sunt în plus \emph{jurnalizate} (prin \texttt{\_log\_detection\_if\_needed} cu tip \texttt{plate} și status \texttt{"authorized"} / \texttt{"unauthorized"}).
 \end{description}
 
+Listing-ul~\ref{lst:decizie_alarmare} ilustrează modul în care aceste reguli sunt evaluate în cadrul firului de fuziune. Cele cinci categorii de detecții sunt analizate independent pentru fiecare cadru, permițând astfel generarea simultană a mai multor alarme pe baza unei singure imagini. Fiecare ramură de execuție determină tipul, nivelul de severitate și subiectul de deduplicare (\texttt{dedup\_subject}), delegând ulterior operațiunea de salvare persistentă către funcția comună \texttt{create\_alarm\_if\_ \linebreak needed} (Listing-ul~\ref{lst:dedup_alarme}).
+
+\begin{lstlisting}[caption={Decizia de alarmare pentru un cadru, în firul de fuziune (\texttt{app.py}).},label={lst:decizie_alarmare}]
+# Ruleaza dupa ce rezultatele unui cadru au fost agregate
+for face in results.faces:
+    if face.name == "Unknown":
+        create_alarm_if_needed(camera_id, "face", "critical",
+                               dedup_subject=bbox_bucket(face.bbox))
+    if camera.zone.is_restricted and not is_authorized(face, camera.zone):
+        subject = bbox_bucket(face.bbox) if face.is_unknown else face.employee_id
+        create_alarm_if_needed(camera_id, "unauthorized_zone", "critical",
+                               dedup_subject=subject)
+
+for weapon in results.weapons:
+    create_alarm_if_needed(camera_id, "weapon", weapon.severity,
+                           dedup_subject=weapon.cls)
+
+for fire in results.fire:
+    if fire.confirmed and fire.alert:          # confirmare temporala multi-cadru
+        severity = "critical" if fire.cls == "fire" else "high"
+        create_alarm_if_needed(camera_id, "fire", severity,
+                               dedup_subject=fire.cls)
+
+for action in results.har:
+    if action.cls != "normal":                 # fight, vandalism, ...
+        create_alarm_if_needed(camera_id, "har", action.severity,
+                               dedup_subject=action.cls)
+
+for plate in results.plates:
+    if plate.text in (None, "", "UNKNOWN"):    # fara citire OCR valida
+        continue
+    authorized = plate.text in authorized_plates
+    log_detection_if_needed(camera_id, "plate",                # placuta e si jurnalizata
+                            status="authorized" if authorized else "unauthorized")
+    if not authorized:
+        create_alarm_if_needed(camera_id, "plate", "high",
+                               dedup_subject=plate.text)
+\end{lstlisting}
+
 \paragraph*{Notă.} Spre deosebire de regula persoanelor, alarma de plăcuță este \emph{globală} (nu depinde de zona camerei): o plăcuță este considerată neautorizată dacă numărul ei nu apare în baza de date, indiferent de cameră (vezi \S\ref{subsec:cerinte_functionale}, F3 și F7).
 
 \subsection{Captura asociată (snapshot)}
@@ -923,7 +962,32 @@ Componenta \texttt{dedup\_subject} este cea care \emph{distinge} detecțiile con
 
 Pe lângă poarta din memorie (care se pierde la repornire), există un \linebreak \textbf{backstop în baza de date}: înainte de a persista o alarmă, sistemul verifică prin \texttt{get\_recent\_alarm} dacă există deja o alarmă recentă, nerezolvată, cu aceeași cheie (inclusiv \texttt{dedup\_subject}, păstrat în metadate), prevenind o rafală de duplicate imediat după ce serverul revine. Pentru comparație, jurnalizarea folosește propriul cooldown, mai scurt și pe subiect explicit (\texttt{log\_cooldown\_\linebreak seconds = 5}).
 
-Figura~\ref{fig:flux_alarmare} sintetizează întreaga decizie de alarmare pentru un cadru, de la rezultatele agregate până la persistarea alarmei prin poarta comună de deduplicare.
+Listing-ul~\ref{lst:dedup_alarme} detaliază această componentă centralizată prin care este direc-ționat orice apel către funcția \texttt{create\_alarm\_if\_needed} (introdusă în Listing-ul~\ref{lst:decizie_alarmare}). Verificarea și rezervarea intervalului de latență (\textit{cooldown}) se realizează în mod atomic, operațiunile fiind protejate de mecanismul de excludere mutuală \texttt{alarm\_lock}. Această etapă este urmată de o verificare redundantă (\textit{backstop}) la nivelul bazei de date, procesul finalizându-se cu înregistrarea persistentă și difuzarea alarmei către clienți.
+
+\begin{lstlisting}[caption={Poarta comună de deduplicare a alarmelor (\texttt{\_create\_alarm\_if\_needed} din \texttt{app.py}).},label={lst:dedup_alarme}]
+def create_alarm_if_needed(camera_id, alarm_type, severity,
+                           description, snapshot, metadata, dedup_subject):
+    key = f"{camera_id}:{alarm_type}:{dedup_subject or ''}"
+    now = time.time()
+
+    with alarm_lock:                          # poarta atomica intre fire
+        last = alarm_cooldowns.get(key, 0)
+        if now - last < ALARM_COOLDOWN_SECONDS:   # 30 s
+            return                            # duplicat in fereastra de cooldown
+        alarm_cooldowns[key] = now            # rezerva slotul
+
+    # Backstop DB: cooldown-ul din memorie se pierde la repornire
+    if db.get_recent_alarm(camera_id, alarm_type,
+                           ALARM_COOLDOWN_SECONDS, dedup_subject):
+        return                                # alarma recenta nerezolvata exista deja
+
+    metadata["dedup_subject"] = dedup_subject
+    db.create_alarm(camera_id, alarm_type, severity,
+                    description, snapshot, metadata)
+    # alarma persistata e difuzata in UI (panou alarme, REST)
+\end{lstlisting}
+
+Figura~\ref{fig:flux_alarmare} sintetizează fluxul decizional complet de alarmare pentru un singur cadru, de la evaluarea rezultatelor agregate până la stocarea persistentă a evenimentului prin intermediul mecanismului centralizat de deduplicare.
 
 \begin{figure}[htbp]
 \centering
