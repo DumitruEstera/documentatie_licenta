@@ -868,6 +868,30 @@ Parametrii concreți ai token-ului, din \texttt{app.py}:
 
 Logica de alarmare este punctul în care detecțiile brute ale modulelor AI devin evenimente acționabile pentru operator. Ea este implementată centralizat în firul de fuziune (\S\ref{subsec:fire_executie}), după ce toate rezultatele unui cadru au fost agregate, și are trei responsabilități: (i) evaluarea regulilor de declanșare, (ii) atribuirea unei severități, (iii) persistarea și difuzarea alarmei cu deduplicare. Această secțiune descrie regulile exact așa cum sunt implementate în \texttt{app.py}.
 
+\subsection{Modelul evenimentelor: detecție, jurnal și alarmă}
+\label{subsec:model_evenimente}
+
+Înainte de a detalia regulile, este utilă o delimitare clară a noțiunilor cu care operează sistemul, întrucât ele sunt ușor de confundat, deși au roluri, niveluri de persistență și cicluri de viață diferite. Figura~\ref{fig:flux_evenimente} sintetizează relațiile dintre ele.
+
+\begin{description}
+	\item[Detecția] este rezultatul brut produs de un modul AI pentru \emph{un singur cadru}: o clasă, un nivel de certitudine (scor de încredere) și, după caz, o casetă de încadrare (\textit{bounding box}). Ea este \emph{volatilă} -- există exclusiv pe cadrul adnotat difuzat în fluxul live și nu este stocată ca atare. Marea majoritate a detecțiilor (de exemplu, o față cunoscută sau un cadru fără evenimente) nu generează înregistrări persistente.
+	
+	\item[Jurnalul] (tabelul \texttt{detection\_logs}) reprezintă înregistrarea \emph{pasivă} a unei detecții considerate relevante. Acesta constituie istoricul interogabil și exportabil în format CSV al sistemului -- documentează \emph{ce} s-a întâmplat și \emph{când}, fără a impune vreo acțiune operatorului. Pentru a preveni încărcarea istoricului cu date redundante, jurnalizarea este deduplicată pe o fereastră scurtă, de 5~secunde, utilizând cheia \texttt{(cameră, tip, subiect)}.
+	
+	\item[Alarma] (tabelul \texttt{alarms}) constituie \emph{escaladarea} unui subset de detecții considerate critice (persoană necunoscută, foc/fum confirmat, armă, acțiune periculoasă, vehicul neautorizat). Spre deosebire de jurnal, alarma solicită \emph{atenția imediată} a operatorului: este însoțită de un nivel de severitate și de o captură de imagine a cadrului (\textit{snapshot}), este afișată în panoul dedicat și este deduplicată pe o fereastră mai lungă, de 30~secunde (\S\ref{subsec:dedup}). Orice alarmă este inițializată implicit în starea \texttt{unresolved}.
+	
+	\item[Rezolvarea] încheie ciclul de viață al alarmei. Operatorul o triază (UC11) și o marchează într-una dintre cele două stări terminale: \texttt{resolved} -- \emph{alarmă rezolvată}, corespunzând unui incident real care a fost tratat -- sau \texttt{false\_alarm} -- \emph{alarmă falsă}, atunci când evenimentul semnalat nu corespunde unei situații reale (un fals pozitiv al detectorului sau o declanșare lipsită de relevanță operațională). În ambele cazuri, se înregistrează utilizatorul care a acționat (\texttt{resolved\_by}) și momentul deciziei (\texttt{resolved\_at}), moment în care alarma este eliminată din lista alertelor active.
+\end{description}
+
+Distincția esențială este aceea că \emph{jurnalul} și \emph{alarma} funcționează ca două canale \emph{paralele}, nu unul derivat din celălalt: orice detecție relevantă este jurnalizată, în timp ce doar subsetul critic generează, \emph{în mod suplimentar}, o alarmă. Modulul de recunoaștere a plăcuțelor de înmatriculare ilustrează clar această dualitate -- o citire OCR validă este întotdeauna jurnalizată cu starea \texttt{authorized} sau \texttt{unauthorized}, dar declanșează o alarmă \emph{exclusiv} dacă plăcuța este neautorizată. Restul secțiunii detaliază regulile specifice prin care o detecție este promovată la stadiul de alarmă.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{flux_evenimente.pdf}
+\caption{Modelul conceptual al evenimentelor și ciclul de viață al unei alarme. O \emph{detecție} brută, volatilă, devine relevantă și este înregistrată ca \emph{jurnal} (istoric pasiv, deduplicare 5~s); subsetul critic generează în plus o \emph{alarmă} (stare \texttt{unresolved}, severitate, snapshot, deduplicare 30~s). Operatorul triază alarma (UC11) într-una din cele două stări terminale: \texttt{resolved} (alarmă rezolvată -- incident real tratat) sau \texttt{false\_alarm} (alarmă falsă). Jurnalul și alarma sunt canale \emph{paralele}: o detecție relevantă este jurnalizată, iar dacă este și critică, este escaladată ca alarmă.}
+\label{fig:flux_evenimente}
+\end{figure}
+
 \subsection{Reguli de declanșare}
 
 O alarmă este creată prin metoda \texttt{\_create\_alarm\_if\_needed(camera\_id, \linebreak alarm\_type, severity, description, snapshot, metadata, dedup\_\linebreak subject)}. Regulile efective sunt următoarele:
@@ -963,6 +987,7 @@ Severitatea este un câmp text pe tabela \texttt{alarms}, cu valoarea implicită
 \end{table}
 
 \subsection{Deduplicarea temporală}
+\label{subsec:dedup}
 
 Pentru a nu inunda operatorul cu alarme repetate pentru același eveniment continuu, fiecare creare de alarmă trece printr-un mecanism de \textbf{cooldown}. Cheia de deduplicare este tripletul \texttt{(camera\_id, alarm\_type, dedup\_subject)} -- concatenat în forma \texttt{"camera\_id:alarm\_type:subiect"} -- iar fereastra este \texttt{alarm\_\linebreak cooldown\_seconds = 30}: dacă o alarmă cu aceeași cheie a fost creată în ultimele 30~de secunde, noua declanșare este ignorată. Verificarea și rezervarea slot-ului (actualizarea timestamp-ului) se fac sub \texttt{alarm\_lock}, astfel încât două fire concurente să nu treacă ambele de poartă.
 

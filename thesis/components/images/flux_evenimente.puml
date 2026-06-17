@@ -1,0 +1,74 @@
+@startuml flux_evenimente
+' Modelul conceptual al evenimentelor: detectie -> jurnal / alarma -> rezolvare
+' (S4.x, sec:logica_alarme)
+
+skinparam shadowing false
+skinparam backgroundColor transparent
+skinparam defaultFontName Serif
+skinparam defaultFontSize 13
+skinparam ArrowColor #555555
+skinparam ArrowFontColor #333333
+
+skinparam activity {
+  BorderColor #333333
+  BackgroundColor #EAF1FB
+  FontColor #111111
+  DiamondBorderColor #5A6B8C
+  DiamondBackgroundColor #FFF3E0
+  DiamondFontColor #111111
+  StartColor #5A6B8C
+  EndColor #5A6B8C
+  BarColor #5A6B8C
+}
+
+skinparam note {
+  BorderColor #B0792C
+  BackgroundColor #FFF3E0
+  FontColor #111111
+  FontSize 11
+}
+
+start
+:**Detecție**\nrezultat brut per-cadru\n(clasă, scor, bounding box);
+note right
+  Volatilă: există doar pe cadrul
+  adnotat și în fluxul live.
+  Nu este, în sine, stocată.
+end note
+
+if (Detecție relevantă?) then (nu)
+  stop
+else (da)
+endif
+
+fork
+  :**Jurnal**\ntabela ""detection_logs""\nistoric pasiv, deduplicare 5 s;
+  note right
+    Înregistrare permanentă, interogabilă
+    și exportabilă (CSV). Documentează
+    //ce s-a întâmplat//; nu cere acțiune.
+  end note
+  detach
+fork again
+  if (Eveniment critic?) then (nu)
+    stop
+  else (da)
+  endif
+  :**Alarmă**\ntabela ""alarms"", status = ""unresolved""\nseveritate + snapshot, deduplicare 30 s;
+  note right
+    Subsetul critic care cere
+    //atenția imediată// a operatorului.
+  end note
+  :Operatorul o triază (UC11);
+  split
+    -> incident real, tratat;
+    :status = ""resolved""\n(**alarmă rezolvată**);
+    detach
+  split again
+    -> nu corespunde unui incident;
+    :status = ""false_alarm""\n(**alarmă falsă**);
+    detach
+  end split
+end fork
+
+@enduml
