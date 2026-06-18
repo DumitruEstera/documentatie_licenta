@@ -1,0 +1,78 @@
+@startuml har_pipeline
+' Procesul modulului HAR: construcția setului de date, ajustarea fină SlowFast și inferența
+' (Cap. 5: sec:modul_actiuni)
+
+skinparam shadowing false
+skinparam backgroundColor transparent
+skinparam defaultFontName Serif
+skinparam defaultFontSize 13
+skinparam roundCorner 8
+skinparam ArrowColor #555555
+skinparam ArrowFontColor #333333
+
+skinparam rectangle {
+  BorderColor #333333
+  BackgroundColor #EAF1FB
+  FontColor #111111
+}
+skinparam package {
+  BorderColor #777777
+  FontStyle bold
+  BackgroundColor #FFF3E0
+}
+skinparam note {
+  BorderColor #B0792C
+  BackgroundColor #FFF3E0
+  FontColor #111111
+  FontSize 11
+}
+
+' ===== Surse de date (3 clase) =====
+rectangle "**Clasa ""normal""**\nactivitate obișnuită (RWF-2000)" as Normal #E0E0E0
+rectangle "**Clasa ""fight""**\nlupte / altercații (RWF-2000)" as Fight #E0E0E0
+rectangle "**Clasa ""vandalism""**\nset de date propriu — 614 clipuri" as Vand #E0E0E0
+note right of Vand
+  Construit de la zero, în 3 etape:
+  1. scraping YouTube (~4.800 link-uri)
+  2. filtrare manuală (>600 clipuri valide)
+  3. editare în OpenShot (decupare segmente)
+end note
+
+' ===== Set de date + împărțire =====
+rectangle "**Set de date** — 2.538 clipuri\nîmpărțire la nivel de fișier: 2.097 antrenare / 441 validare\ndirectoare fizic separate" as DS #D7E9FF
+
+' ===== Pregătirea intrărilor (contract SlowFast) =====
+rectangle "**Pregătirea intrărilor (contract SlowFast)**\nclip de 2 s → eșantionare uniformă a cadrelor\ncalea Slow: 8 cadre · calea Fast: 32 cadre · 224×224\nnormalizare cu statisticile Kinetics-400" as Pack #D7E9FF
+
+' ===== Model =====
+rectangle "**SlowFast-R50** (pre-antrenat: Kinetics-400)\nAdaptare strat de clasificare:\n""Linear(2304, 400)"" → ""Dropout(0.5)"" + ""Linear(2304, 3)""" as Model #D7E9FF
+
+' ===== Antrenare în două faze =====
+package "**Ajustare fină în două faze**" as Train {
+  rectangle "**Faza 1 — backbone înghețat** (5 epoci)\nAntrenarea exclusivă a stratului de clasificare" as Ph1 #FFFFFF
+  rectangle "**Faza 2 — ajustare fină completă**\nbackbone dezghețat, rată de învățare de 10× mai mică\ndecât a stratului de clasificare" as Ph2 #FFFFFF
+  Ph1 --> Ph2
+}
+note right of Train
+  AdamW · label smoothing 0,1
+  WeightedRandomSampler (clase dezechilibrate)
+  AMP · gradient clipping · early stopping (macro-F1)
+end note
+
+' ===== Model rezultat =====
+rectangle "**""best_model.pth""** — model antrenat\n(epoca cu cel mai bun macro-F1 de validare)" as Best #E8F5E9
+
+' ===== Inferență runtime =====
+rectangle "**Inferență runtime** (""har_system.py"")\nclip de 2 s din flux → aceeași pregătire Slow/Fast\n→ SlowFast → clasă: ""normal"" / ""fight"" / ""vandalism""" as Inf #FCE4EC
+
+' ===== Flux =====
+Normal --> DS
+Fight --> DS
+Vand --> DS
+DS --> Pack
+Pack --> Model
+Model --> Ph1
+Ph2 --> Best
+Best --> Inf
+
+@enduml

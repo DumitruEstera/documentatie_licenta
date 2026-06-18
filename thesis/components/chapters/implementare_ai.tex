@@ -943,6 +943,15 @@ Subcapitolele care urmează descriu alegerea arhitecturii, construcția setului 
 crearea de la zero a unui set de date propriu pentru clasa \inlinecode{vandalism}), procesul de
 ajustare fină, parametrii și rezultatele, iar la final modul de integrare în aplicație.
 
+Figura~\ref{fig:har_pipeline} oferă o imagine de ansamblu a întregului proces, de la cele trei surse de date (inclusiv setul propriu pentru clasa \inlinecode{vandalism}) până la modelul antrenat și utilizarea lui la inferență. Spre deosebire de detectoarele de obiecte, intrarea modelului nu este un cadru izolat, ci o pereche de secvențe de cadre (căile \textit{Slow} și \textit{Fast}) eșantionate dintr-un clip; aceeași procedură de pregătire a intrărilor este folosită identic la antrenare și la inferență. Subcapitolele care urmează detaliază fiecare etapă a acestui proces.
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth,height=0.9\textheight,keepaspectratio]{har_pipeline.pdf}
+	\caption{Procesul modulului de recunoaștere a acțiunilor umane. Setul de date este alcătuit din trei clase: \texttt{normal}, \texttt{fight} și \texttt{vandalism}. Clipurile sunt împărțite la nivel de fișier în antrenare și validare, iar fiecare clip este transformat, conform contractului SlowFast, într-o pereche de intrări Slow/Fast. Modelul SlowFast R50 pre-antrenat pe Kinetics-400 primește un strat nou de clasificare cu trei ieșiri și este ajustat fin în două faze. Modelul rezultat (\texttt{best\_model.pth}) este apoi folosit la inferență în aplicație, unde clasifică, prin aceeași pregătire a intrărilor, clipuri de două secunde.}
+	\label{fig:har_pipeline}
+\end{figure}
+
 \subsection{Justificarea alegerii SlowFast R50}
 \label{subsec:justificare_slowfast}
 
