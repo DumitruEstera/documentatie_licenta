@@ -1,0 +1,66 @@
+@startuml weapon_pipeline
+' Pipeline-ul de date și antrenare al detectorului de arme (model ajustat fin propriu)
+' (Cap. 5: sec:modul_arme)
+
+skinparam shadowing false
+skinparam backgroundColor transparent
+skinparam defaultFontName Serif
+skinparam defaultFontSize 13
+skinparam roundCorner 8
+skinparam ArrowColor #555555
+skinparam ArrowFontColor #333333
+
+skinparam rectangle {
+  BorderColor #333333
+  BackgroundColor #EAF1FB
+  FontColor #111111
+}
+skinparam package {
+  BorderColor #777777
+  FontStyle bold
+  BackgroundColor #FFF3E0
+}
+
+' ===== Seturi de date sursă =====
+rectangle "**Dangerous Items** (Zenodo)\n8.478 imagini · 5 clase (toate arme)" as Zen #E0E0E0
+rectangle "**SOHAS** (Roboflow)\n5.858 imagini · 6 clase (2 arme + 4 non-armă)" as Rf #E0E0E0
+
+' ===== Script 1 =====
+rectangle "**""01_download_datasets.py""**\ndescarcă automat ambele seturi de date" as S1 #D7E9FF
+
+' ===== Script 2 (relabel + merge) =====
+package "**""02_relabel_and_merge.py""**" as P2 {
+  rectangle "**Relabel** — toate clasele-armă → clasa unică ""0"" (""weapon"")\nclasele non-armă (telefon, portofel, bancnotă, card)\nsunt eliminate din etichete, dar imaginile rămân\nca **exemple negative** (fundal)" as R1 #FFFFFF
+  rectangle "**Prefixare** ""zen_"" / ""rf_""\nevită coliziunile de nume la unirea seturilor" as R2 #FFFFFF
+  rectangle "**Merge** în structură YOLO ""train"" / ""valid"" / ""test""\npartiții moștenite ca atare din surse (~70 / 15 / 15)" as R3 #FFFFFF
+  rectangle "Generează ""data.yaml"" (""nc: 1"", ""weapon"")" as R4 #FFFFFF
+  R1 --> R2
+  R2 --> R3
+  R3 --> R4
+}
+
+' ===== Script 3 (antrenare) =====
+rectangle "**""03_train_yolo.py""**\nYOLOv8m (pre-antrenat COCO) · 100 epoci · early stopping\nAdamW + programare cosinus · augmentări (HSV, geometrice, Mosaic, MixUp)" as S3 #D7E9FF
+
+' ===== Model rezultat =====
+rectangle "**""best.pt""** — model antrenat\n(ponderi finale)" as Best #E8F5E9
+
+' ===== Script 4 (evaluare pe test) =====
+rectangle "**""04_evaluate_test.py""**\nevaluare pe partiția de **test**\nDate neutilizate în antrenare sau validare" as S4 #D7E9FF
+
+rectangle "Metrici pe test ≈ metricile de validare" as Metrics #E8F5E9
+
+' ===== Inferență runtime =====
+rectangle "**Inferență runtime** (""WeaponDetectionSystem"")\nrețin doar detecțiile cu încredere ≥ 0,7\n→ confirmare temporală pe mai multe cadre → alertă" as Inf #FCE4EC
+
+' ===== Flux =====
+Zen --> S1
+Rf --> S1
+S1 --> R1
+R4 --> S3
+S3 --> Best
+Best --> S4
+S4 --> Metrics
+Best --> Inf
+
+@enduml

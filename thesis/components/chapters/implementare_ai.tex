@@ -748,7 +748,16 @@ for k in [k for k, v in frame_history.items()
 \section{Modulul de detecție a armelor (model ajustat fin propriu)}
 \label{sec:modul_arme}
 
-Spre deosebire de componentele anterioare, care integrează modele pre-antrenate în forma lor originală, modulul dedicat detecției de arme se fundamentează pe o arhitectură YOLOv8 reantrenată (ajustată fin) integral în cadrul acestui proiect, utilizând un set de date construit special pentru această sarcină. Această decizie a fost motivată de absența unui model public suficient de robust pentru identificarea generică a armelor în scenariile de supraveghere video. Prezenta secțiune detaliază întregul flux de dezvoltare, pornind de la deciziile de proiectare (precum definirea unei singure clase de interes și selecția arhitecturii de bază), continuând cu etapa de colectare și uniformizare a setului de date, și finalizându-se cu parametrizarea procesului de antrenare și evaluarea rezultatelor obținute. Fluxul de antrenare este structurat modular în trei scripturi, executate secvențial: \inlinecode{01\_download\_datasets.py}, \inlinecode{02\_relabel\_and\_merge.py} și \inlinecode{03\_train\_yolo.py}.
+Spre deosebire de componentele anterioare, care integrează modele pre-antrenate în forma lor originală, modulul dedicat detecției de arme se fundamentează pe o arhitectură YOLOv8 reantrenată (ajustată fin) integral în cadrul acestui proiect, utilizând un set de date construit special pentru această sarcină. Această decizie a fost motivată de absența unui model public suficient de robust pentru identificarea generică a armelor în scenariile de supraveghere video. Prezenta secțiune detaliază întregul flux de dezvoltare, pornind de la deciziile de proiectare (precum definirea unei singure clase de interes și selecția arhitecturii de bază), continuând cu etapa de colectare și uniformizare a setului de date, și finalizându-se cu parametrizarea procesului de antrenare și evaluarea rezultatelor obținute. Fluxul de antrenare este structurat modular în patru scripturi, executate secvențial: \inlinecode{01\_download\_datasets.py}, \inlinecode{02\_relabel\_and\_merge.py}, \inlinecode{03\_train\_yolo.py} și \inlinecode{04\_evaluate\_test.py}.
+
+Figura~\ref{fig:weapon_pipeline} oferă o imagine de ansamblu a întregului flux, de la cele două seturi de date sursă până la modelul antrenat, evaluarea lui pe partiția de test și utilizarea la inferență, structurat pe cele patru scripturi menționate. Subcapitolele care urmează detaliază fiecare etapă: justificarea clasei unice, selecția modelului de bază, seturile de date, preprocesarea și unificarea lor, parametrii de antrenare și rezultatele obținute.
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[height=0.9\textheight]{weapon_pipeline.pdf}
+	\caption{Fluxul de date și antrenare a detectorului de arme. Cele patru scripturi execută secvențial: (1) descărcarea seturilor Zenodo și Roboflow; (2) unificarea lor (remapare pe o clasă, reținerea exemplelor negative și formatare YOLO); (3) antrenarea modelului YOLOv8m (\texttt{best.pt}); (4) evaluarea pe datele de test. Ponderile validate sunt ulterior integrate în aplicația de supraveghere.}
+	\label{fig:weapon_pipeline}
+\end{figure}
 
 \subsection{Justificarea unei singure clase \textit{weapon}}
 \label{subsec:justificare_clasa_unica}
@@ -883,8 +892,10 @@ aplicate multiple transformări de augmentare a datelor:
 Antrenarea a parcurs toate cele 100 de epoci (early stopping nu s-a declanșat). Modelul a fost
 evaluat în două regimuri: pe partiția de \textit{validare} (monitorizată la fiecare epocă în timpul
 antrenării) și, separat, pe partiția de \textit{test} -- date pe care modelul nu le-a întâlnit
-niciodată, nici la antrenare, nici la selecția epocii optime. Ambele seturi de metrici sunt
-sintetizate comparativ în tabelul~\ref{tab:rezultate_arme}.
+niciodată, nici la antrenare, nici la selecția epocii optime. Evaluarea pe partiția de test este
+realizată separat de scriptul \inlinecode{04\_evaluate\_test.py}, care încarcă ponderile finale
+\inlinecode{best.pt} și rulează o singură rundă de validare pe această partiție. Ambele seturi de
+metrici sunt sintetizate comparativ în tabelul~\ref{tab:rezultate_arme}.
 
 \begin{table}[h]
     \centering
