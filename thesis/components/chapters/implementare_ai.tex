@@ -792,6 +792,23 @@ Deoarece niciun set de date public nu oferea, în mod individual, o acoperire su
 După combinare, setul de date final conține 14.336 de imagini și 12.592 de bounding box-uri,
 oferind o diversitate suficientă pentru antrenarea unui detector robust.
 
+Figura~\ref{fig:distributie_clase_arme} prezintă distribuția adnotărilor (numărul de bounding
+box-uri) pe categoriile originale ale celor două surse, înainte de remaparea la clasa unică
+\inlinecode{weapon}. Deoarece clasa \inlinecode{knife} apare în ambele seturi, ea este reprezentată
+prin două bare distincte (\inlinecode{knife} (Zenodo) și \inlinecode{knife} (SOHAS)), pentru a
+evidenția contribuția fiecărei surse.
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth]{distributie_clase_arme.png}
+	\caption{Distribuția casetelor de încadrare (\textit{bounding boxes}) pe clasele originale ale celor două seturi de date, anterior remapării la categoria unică \texttt{weapon}. Cromatica indică proveniența și tipologia datelor: albastru pentru cele cinci clase de arme din setul Zenodo, portocaliu pentru clasele de arme reținute din SOHAS (\texttt{pistol} și \texttt{knife}), respectiv gri pentru clasele non-armă din SOHAS (excluse la unificare și reutilizate drept exemple negative). Categoria \texttt{knife}, comună ambelor surse, este reprezentată distinct. Valorile afișate deasupra barelor indică volumul total de adnotări, cumulat pentru partițiile de antrenare, validare și testare.}
+	\label{fig:distributie_clase_arme}
+\end{figure}
+
+Din analiza distribuției datelor se desprind două observații relevante privind calitatea setului de antrenare. În primul rând, setul Zenodo prezintă o distribuție echilibrată: cele cinci clase de arme beneficiază de un volum de adnotări foarte apropiat (între 1.708 pentru \inlinecode{knife} și 1.796 pentru \inlinecode{baseball\_bat}), prevenind astfel dominanța unei categorii specifice în timpul antrenării. La acestea se adaugă, din setul SOHAS, încă 1.510 adnotări pentru clasa \inlinecode{pistol} și 2.277 pentru \inlinecode{knife}. Prin cumularea celor două surse, armele albe (\inlinecode{knife}, totalizând 3.985 de instanțe) și armele de foc (\inlinecode{pistol}, \inlinecode{rifle}, \inlinecode{gun}, totalizând 5.018 instanțe) devin cele mai bine reprezentate categorii, o pondere care reflectă frecvența acestor amenințări în scenariile reale de supraveghere. Însumate, cele șapte categorii de arme totalizează \textbf{12.592} de adnotări -- valoare ce reprezintă numărul exact de casete de încadrare (\textit{bounding boxes}) din setul unificat, întrucât adnotările pentru obiectele inofensive nu sunt păstrate ca ținte pozitive. 
+
+În al doilea rând, cele patru clase non-armă din SOHAS (\inlinecode{smartphone} -- 715, \inlinecode{billete} -- 477, \inlinecode{monedero} -- 600 și \inlinecode{tarjeta} -- 279, însumând 2.071 de obiecte) nu sunt eliminate, ci sunt valorificate strategic drept exemple negative. Imaginile aferente sunt reținute în setul de date fără adnotări (cu fișiere de etichetare vide), instruind astfel modelul să evite clasificarea eronată a obiectelor de mână cu geometrie similară (precum telefoanele sau portofelele), conform mecanismului de preprocesare detaliat în Secțiunea~\ref{subsec:preprocesare_unificare}.
+
 \subsection{Preprocesarea și unificarea}
 \label{subsec:preprocesare_unificare}
 
