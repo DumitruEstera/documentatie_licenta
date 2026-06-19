@@ -1261,6 +1261,22 @@ Metricile globale obținute pe setul de validare de către cel mai bun model (ep
 
 Modelul atinge o acuratețe globală de $94{,}33\%$ și un scor macro-F1 de $94{,}56\%$, valori foarte bune pentru o problemă de clasificare a acțiunilor pe trei clase, în condiții reale de supraveghere video.
 
+Figura~\ref{fig:curbe_antrenare_har} prezintă evoluția procesului de antrenare pe parcursul celor 28 de epoci. Graficul din stânga ilustrează funcțiile de cost aferente seturilor de antrenare și validare, iar graficul din dreapta evidențiază variația scorului macro-F1 calculat pe setul de validare.
+
+Se observă o scădere constantă a funcției de cost pentru ambele seturi, costul de validare stabilizându-se în jurul valorii de $0{,}43$ după aproximativ 19–20 de epoci. Absența unei creșteri ulterioare a acestuia indică faptul că modelul nu manifestă fenomenul de supraînvățare (\textit{overfitting}). Diferența moderată dintre costul final de antrenare ($0{,}3065$) și cel de validare ($0{,}4306$) este compatibilă cu dimensiunea relativ redusă a setului de date utilizat.
+
+În primele epoci se remarcă o variație mai accentuată a performanței, reflectată prin creșterea temporară a costului de validare și scăderea scorului macro-F1 în intervalul epocilor 4–6. Acest comportament poate fi asociat tranziției dintre cele două etape ale antrenării. În primele cinci epoci a fost antrenat exclusiv stratul de clasificare adăugat, în timp ce parametrii rețelei de bază au fost menținuți fixați. Începând cu epoca a șasea, rețeaua de bază (\textit{backbone}) a fost deblocată, ceea ce a generat o perturbare tranzitorie a procesului de optimizare, urmată de o îmbunătățire rapidă a performanței pe măsură ce întregul model s-a adaptat sarcinii de clasificare.
+
+Scorul macro-F1 pe setul de validare a crescut de la aproximativ $0{,}81$ la peste $0{,}94$, valoarea maximă fiind atinsă în epoca 21, corespunzătoare modelului salvat în fișierul \inlinecode{best\_model.pth}. După acest moment, performanța s-a menținut relativ constantă, fără îmbunătățiri semnificative, ceea ce a condus la activarea mecanismului de oprire timpurie (\textit{early stopping}) în epoca 28.
+
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth]{curbe_antrenare_har.png}
+	\caption{Evoluția antrenării modelului de recunoaștere a acțiunilor pe durata a 28 de epoci. Stânga: funcția de cost de antrenare (albastru) și de validare (roșu). Dreapta: scorul macro-F1 obținut pe setul de validare. Perturbarea din jurul epocilor 4--6 corespunde deblocării parametrilor rețelei de bază (tranziția de la ponderi fixe în epocile 1--5 la optimizare globală începând cu epoca 6). Ponderile optime s-au obținut la epoca 21, mecanismul de oprire timpurie (\textit{early stopping}) declanșându-se la epoca 28.}
+	\label{fig:curbe_antrenare_har}
+\end{figure}
+
 \subsection{Analiza per clasă}
 \label{subsec:analiza_per_clasa}
 
@@ -1282,6 +1298,20 @@ Rezultatele detaliate pe fiecare clasă sunt prezentate în tabelul~\ref{tab:per
 \end{table}
 
  Datele de evaluare evidențiază performanța optimă obținută pe clasa \linebreak \inlinecode{vandalism} (o precizie de $98{,}2\%$ și un scor F1 de $0{,}965$), pentru care a fost utilizat setul de date propriu. Nivelul ridicat al metricilor indică faptul că secvențele video agregate și verificate manual oferă o reprezentare suficient de stabilă pentru a permite modelului o clasificare sigură. Categoriile \inlinecode{normal} și \inlinecode{fight} mențin, de asemenea, performanțe ridicate (scoruri F1 de $0{,}933$, respectiv $0{,}939$). Erorile de clasificare reziduale se manifestă, în mod previzibil, preponderent între aceste două clase, ambele provenind din setul de date RWF-2000. Acest comportament poate fi atribuit prezenței unor secvențe cu ambiguitate vizuală ridicată, situate la granița dintre o activitate umană rapidă și o altercație fizică propriu-zisă.
+
+Distribuția erorilor de clasificare este ilustrată prin matricea de confuzie normalizată prezentată în Figura~\ref{fig:matrice_confuzie_har}, unde liniile corespund claselor reale, iar coloanele claselor prezise de model. Valorile ridicate de pe diagonală ($0{,}95$ pentru \inlinecode{normal}, $0{,}94$ pentru \inlinecode{fight} și $0{,}95$ pentru \inlinecode{vandalism}) indică o rată ridicată de clasificare corectă pentru toate cele trei categorii analizate.
+
+Erorile de clasificare se manifestă predominant între clasele \inlinecode{normal} și \inlinecode{fight}: aproximativ $5\%$ dintre exemplele din clasa \inlinecode{normal} sunt încadrate eronat în clasa \inlinecode{fight}, în timp ce $6\%$ dintre exemplele din clasa \inlinecode{fight} sunt clasificate ca \inlinecode{normal}. Acest comportament este explicabil prin faptul că ambele categorii provin din același set de date, RWF-2000, și prezintă caracteristici vizuale similare.
+
+În schimb, clasa \inlinecode{vandalism} este confundată foarte rar cu celelalte două clase, procentul de clasificări eronate fiind sub $1\%$ în ambele direcții. Acest rezultat sugerează că modelul a reușit să învețe reprezentări distinctive pentru această categorie, diferențiind-o eficient de acțiunile asociate claselor \inlinecode{normal} și \inlinecode{fight}.
+
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.8\textwidth]{matrice_confuzie_har.png}
+	\caption{Matricea de confuzie normalizată a modelului de recunoaștere a acțiunilor, evaluată pe partiția de validare. Liniile indică apartenența reală la clasă (\textit{ground truth}), în timp ce coloanele reprezintă predicțiile modelului, valorile fiind normalizate pe fiecare linie. Dominanța valorilor de pe diagonala principală confirmă acuratețea ridicată a clasificării, erorile reziduale manifestându-se cu precădere sub forma unor confuzii între clasele \texttt{normal} și \texttt{fight}.}
+	\label{fig:matrice_confuzie_har}
+\end{figure}
 
 \subsubsection{Integrarea în aplicație}
 La rulare, modelul antrenat este folosit de \inlinecode{HumanActionRecognitionSystem}, care nu
