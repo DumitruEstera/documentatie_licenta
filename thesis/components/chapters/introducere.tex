@@ -10,19 +10,80 @@
 \section{Contextul actual al supravegherii video}
 \label{sec:context}
 
+Supravegherea video a evoluat de la un instrument folosit aproape exclusiv în domeniul militar și industrial la o componentă obișnuită a infrastructurii urbane și rezidențiale. Scăderea costurilor camerelor video și dezvoltarea tehnologiilor de comunicație au transformat aceste sisteme din soluții specializate în produse accesibile unui număr tot mai mare de utilizatori. La nivel global, această evoluție se reflectă și în valoarea pieței de supraveghere video, estimată la 53,7 miliarde de dolari în 2023, cu perspective de creștere până la 83,3 miliarde de dolari în 2028 \cite{markets_2023}. Și în România se observă o extindere a sistemelor de monitorizare, atât în spațiile publice, cât și în mediul rezidențial, în contextul respectării reglementărilor privind protecția datelor cu caracter personal \cite{legea190}. Prin urmare, dezvoltarea acestor tehnologii aduce atât beneficii practice, cât și provocări de natură etică și juridică.
+
+Pe lângă creșterea numărului de sisteme instalate, s-a schimbat și modul în care acestea sunt utilizate. Sistemele clasice de supraveghere aveau un rol în principal pasiv: imaginile erau stocate și analizate doar după producerea unui incident \cite{sreenu_durai}. Evoluția algoritmilor de viziune artificială și a metodelor de învățare profundă a permis însă dezvoltarea unor sisteme capabile să proceseze automat fluxurile video în timp real. Astfel, accentul s-a mutat de la simpla înregistrare a imaginilor către identificarea rapidă a evenimentelor relevante și sprijinirea intervenției imediate.
+
+Această schimbare răspunde unei probleme importante: volumul foarte mare de date video depășește capacitatea operatorilor umani de a le analiza eficient. În centrele de monitorizare clasice, un singur operator gestionează simultan zeci de fluxuri video. Studiile din literatura de specialitate demonstrează că monitorizarea continuă este o activitate solicitantă, iar nivelul de atenție și capacitatea de detectare a evenimentelor scad semnificativ după aproximativ 20 de minute de activitate \cite{sulman_2008, green_1999}. În plus, majoritatea imaginilor surprind situații obișnuite, fără incidente, ceea ce face dificilă menținerea atenției pe termen lung. Din acest motiv, utilizarea unor sisteme automate de analiză video devine o soluție necesară.
+
+În acest context, sistemele inteligente de supraveghere reprezintă o direcție firească de dezvoltare. Acestea pot analiza automat conținutul video și pot semnala operatorilor doar situațiile care necesită atenție. Soluția software propusă în cadrul acestei lucrări de licență se înscrie în această tendință, având ca obiectiv creșterea eficienței procesului de monitorizare prin utilizarea tehnicilor moderne de analiză video.
+
+
 \section{Motivația alegerii temei}
 \label{sec:motivatie}
+
+Diferența majoră dintre volumul uriaș de date video generate și capacitatea limitată de atenție a operatorilor umani, detaliată în Secțiunea~\ref{sec:context}, subliniază nevoia evidentă pentru sisteme de supraveghere inteligente. Totuși, această necesitate nu justifică prin ea însăși dezvoltarea unei soluții noi, mai ales că piața oferă deja numeroase produse comerciale. Prin urmare, motivația acestei lucrări pornește tocmai de la o analiză a limitărilor pe care le au sistemele actuale, la care se adaugă un interes personal și tehnic pentru combinarea domeniului viziunii artificiale cu cel al securității fizice.
+
+Majoritatea soluțiilor comerciale disponibile în prezent sunt sisteme \emph{închise} și \emph{proprietare}. Acest model de afaceri creează o \emph{dependență puternică față de producător} și atrage după sine costuri mari pentru achiziție și licențe. Însă cel mai mare dezavantaj constă în faptul că aceste sisteme funcționează ca o „cutie neagră”: algoritmii iau decizii în fundal, iar utilizatorul nu are acces la modul lor de funcționare și nici nu le poate ajusta parametrii. O astfel de rigiditate face ca sistemele să fie greu de adaptat la situații specifice sau de integrat cu echipamente deja existente, limitând flexibilitatea de care au nevoie utilizatorii.
+
+În contrast cu această abordare, lucrarea de față își propune să demonstreze că se poate construi un sistem de supraveghere inteligent și competitiv, bazat pe principii \emph{accesibile, deschise și flexibile}. \emph{Accesibilitatea} este asigurată prin utilizarea exclusivă a tehnologiilor cu sursă deschisă (open-source) consacrate, prezentate în Capitolul~\ref{ch:fundamente}, ceea ce elimină costurile legate de licențiere. \emph{Deschiderea} oferă transparență totală asupra fluxului de procesare a datelor, permițând verificarea fiecărei etape. Totodată, \emph{flexibilitatea} este obținută printr-o arhitectură modulară, în care diferiții algoritmi de detecție funcționează independent; aceștia pot fi activați, dezactivați sau înlocuiți cu ușurință, astfel încât sistemul să se poată adapta în timp la noile cerințe ale beneficiarului.
+
+Utilitatea practică a unei astfel de arhitecturi poate fi observată în multiple domenii. De exemplu, în \textbf{mediul militar}, o soluție independentă elimină riscul trimiterii datelor sensibile către servere externe (cloud). În cazul \textbf{instituțiilor publice}, un sistem fără costuri de licențiere respectă bugetele alocate, dar și regulile stricte de transparență și auditare. În același timp, în \textbf{mediul privat}, arhitectura oferă libertatea de a personaliza funcționalitățile în funcție de nevoile specifice ale fiecărei afaceri.
+
+Nu în ultimul rând, alegerea temei a fost motivată de dorința de a aborda o problemă reală, cu un impact concret asupra siguranței publice. De asemenea, dezvoltarea acestui proiect a facilitat parcurgerea integrală a ciclului de creare a unei aplicații complexe de viziune artificială: de la selecția și antrenarea modelelor, până la construirea unei arhitecturi software solide și implementarea unei interfețe intuitive pentru utilizatorul final.
 
 \section{Problema abordată}
 \label{sec:problema}
 
+Pornind de la contextul descris în Secțiunea~\ref{sec:context} și de la motivația detaliată în Secțiunea~\ref{sec:motivatie}, problema centrală a acestei lucrări se poate rezuma astfel: \emph{cum se poate construi un sistem integrat de supraveghere, capabil să analizeze imagini în timp real și să îndeplinească simultan mai multe sarcini diferite de procesare, menținând totodată o viteză de reacție optimă și o interfață ușor de folosit pentru operatorii umani?} Această întrebare reunește mai multe provocări distincte, iar găsirea unei soluții care să le îmbine armonios reprezintă esența acestui proiect.
+
+Primul aspect major este \textbf{diversitatea și complexitatea sarcinilor de analiză}. Un sistem de supraveghere eficient nu se poate rezuma la o singură funcție, ci trebuie să extragă simultan mai multe tipuri de informații din scenele monitorizate. În funcție de scopul lor, aceste funcționalități pot fi împărțite în următoarele categorii:
+\begin{itemize}
+	\item \emph{analiza identității}---detectarea fețelor, recunoașterea persoanelor cunoscute și alertarea în cazul prezenței unor indivizi neautorizați în zone \linebreak restricționate; 
+	\item \emph{caracterizarea demografică}---estimarea unor trăsături precum vârsta, genul și starea emoțională, utilă atât pentru realizarea de statistici, cât și pentru o mai bună înțelegere a contextului vizual; 
+	\item \emph{identificarea vehiculelor}---localizarea și citirea plăcuțelor de înmatriculare pentru a facilita controlul accesului auto; 
+	\item \emph{analiza comportamentului}---recunoașterea acțiunilor umane relevante pentru securitate, punând accent pe incidentele agresive, cum ar fi altercațiile sau actele de vandalism; 
+	\item \emph{detectarea amenințărilor}---identificarea rapidă a obiectelor periculoase (de exemplu, arme de foc) și a situațiilor de urgență (incendii sau degajări de fum).
+	
+\end{itemize} 
+
+Dificultatea majoră nu constă doar în abordarea separată a acestor sarcini — deși, în absența unor soluții cu sursă deschisă pre-antrenate, pentru două dintre acestea a fost necesară antrenarea unor modele dedicate — ci, mai ales, în \emph{integrarea lor simultană} într-un singur sistem. Acesta trebuie să proceseze aceleași fluxuri video fără ca modulele componente să concureze excesiv pentru resursele hardware disponibile.
+
+A doua provocare majoră este \textbf{necesitatea funcționării în timp real}. Pentru ca un sistem de securitate să aibă un rol proactiv, el trebuie să analizeze fluxurile video la o viteză cât mai apropiată de cea a înregistrării efective. Doar așa un eveniment critic poate fi semnalat exact atunci când are loc, evitându-se întârzierile care ar anula utilitatea practică a alarmei. Acest lucru impune limitări stricte privind timpul de procesare pentru fiecare cadru. Situația este complicată de faptul că modelele moderne de inteligență artificială consumă multe resurse de calcul, iar rularea lor simultană poate duce la întârzieri majore. Prin urmare, problema devine una de \emph{arhitectură}: cum pot fi coordonate mai multe modele complexe astfel încât timpul de răspuns să rămână suficient de scurt pentru o vizualizare fluidă, folosind în același timp echipamente hardware obișnuite și accesibile.
+
+Al treilea aspect esențial se referă la \textbf{utilitatea interfeței pentru operatorul uman}. Deoarece scopul sistemului este să sprijine munca operatorului, și nu să îl înlocuiască complet, rezultatele analizelor trebuie afișate într-un mod care să îi ghideze rapid atenția către problemele reale. Chiar dacă un algoritm identifică perfect evenimentele, dacă generează prea multe notificări repetitive sau nu oferă un context clar, el nu rezolvă problema inițială. De aceea, modul de prezentare a datelor este vital: imaginile trebuie redate și marcate în timp real, iar alarmele trebuie gestionate inteligent, grupând evenimentele similare pentru a nu aglomera ecranul, permițând astfel luarea unor decizii rapide și corecte.
+
+În concluzie, obiectivul acestei lucrări este unul dual: pe de o parte, dezvoltarea și rafinarea unor sarcini individuale prin antrenarea unor modele proprii și integrarea unor algoritmi de optimizare; pe de altă parte, construirea unei arhitecturi software robuste. Aceasta din urmă are rolul de a reuni armonios toate modulele menționate într-un sistem unitar, rapid și ușor de utilizat. Modul în care această provocare este descompusă în obiective concrete și, ulterior, soluționată, va fi detaliat în secțiunea următoare, precum și în capitolele dedicate proiectării și implementării.
+
 \section{Obiectivele lucrării}
 \label{sec:obiective}
 
-\section{Contribuții personale}
-\label{sec:contributii}
+Pentru a răspunde provocărilor formulate în Secțiunea~\ref{sec:problema}, prezenta lucrare își propune atingerea unor obiective fundamentale care să acopere întregul ciclu de dezvoltare a unui sistem de supraveghere inteligentă. Obiectivul central constă în proiectarea și implementarea unei arhitecturi software unitare, capabile să integreze și să orchestreze simultan multiple sarcini complexe de viziune artificială pe aceleași fluxuri video. O cerință esențială a acestei arhitecturi este optimizarea consumului de resurse hardware, astfel încât analiza să se desfășoare în timp real, garantând o viteză de reacție compatibilă cu monitorizarea live.
+
+Pe lângă componenta de procesare propriu-zisă a imaginilor, un alt obiectiv major vizează dezvoltarea unei logici aplicative inteligente. Aceasta presupune construirea unui mecanism de alarmare capabil să evalueze dinamic evenimentele detectate, raportându-le la reguli de securitate prestabilite. Scopul acestui demers este reducerea drastică a alertelor false sau redundante, precum și implementarea unei structuri coerente pentru gestionarea tuturor entităților monitorizate de sistem.
+
+Totodată, lucrarea își propune să abordeze și limitările inerente ale modelelor pre-antrenate disponibile în prezent. Acolo unde soluțiile existente nu pot acoperi scenarii specifice de securitate, se urmărește colectarea și structurarea unor date de antrenament proprii, urmate de dezvoltarea și calibrarea unor modele de detecție dedicate.
+
+Nu în ultimul rând, toate aceste capabilități tehnice urmează să fie unificate într-o interfață destinată utilizatorului final. Conceperea acestei platforme web presupune integrarea unui sistem de control al accesului bazat pe roluri, având ca scop final simplificarea interacțiunii umane cu sistemul și direcționarea eficientă a atenției operatorilor către incidentele de interes major.
+
 
 \section{Structura lucrării}
 \label{sec:structura}
+
+Pentru a facilita parcurgerea documentului, această secțiune trece în revistă conținutul capitolelor următoare, oferind cititorului o hartă a modului în care problema formulată este abordată progresiv, de la fundamentarea teoretică până la evaluarea soluției finale.
+
+\textbf{Capitolul~\ref{ch:stadiul_actual}, \emph{Stadiul actual al sistemelor inteligente de supraveghere video}}, analizează soluțiile existente pe piață și în literatura de specialitate, evidențiind atât avantajele, cât și limitările acestora. Această trecere în revistă justifică necesitatea proiectului și clarifică poziția sistemului propus în raport cu tehnologiile actuale.
+
+\textbf{Capitolul~\ref{ch:fundamente}, \emph{Fundamente teoretice}}, expune conceptele de bază necesare pentru înțelegerea soluției. Sunt detaliate principiile învățării profunde aplicate în viziunea artificială, arhitecturile de detecție a obiectelor (cum ar fi familia de modele YOLO), precum și tehnicile de recunoaștere facială și a acțiunilor umane pe care se bazează funcționarea sistemului.
+
+\textbf{Capitolul~\ref{ch:analiza_proiectare}, \emph{Analiza cerințelor și proiectarea sistemului}}, definește cerințele funcționale și nefuncționale, identifică utilizatorii și scenariile de utilizare. De asemenea, sunt descrise deciziile arhitecturale esențiale — fluxul de procesare concurentă, modelul de gestionare a evenimentelor, structura bazei de date și protocoalele de comunicație — care fundamentează implementarea ulterioară.
+
+\textbf{Capitolul~\ref{ch:implementare_ai}, \emph{Implementarea modulelor de inteligență artificială}}, este dedicat realizării practice a fiecărui algoritm de analiză (recunoașterea facială și profilarea demografică, citirea plăcuțelor de înmatriculare, detectarea armelor, a incendiilor și a acțiunilor umane). Aici sunt detaliați pașii de antrenare a modelelor proprii, împreună cu algoritmii de procesare și decizie asociați, capitolul încheindu-se cu o sinteză a contribuțiilor personale (Secțiunea~\ref{sec:contributii_proprii}).
+
+\textbf{Capitolul~\ref{ch:implementare_web}, \emph{Implementarea aplicației web}}, descrie componenta cu care interacționează utilizatorul final. Sunt prezentate arhitectura de backend (dezvoltată utilizând framework-ul FastAPI), interfața grafică (realizată în React), mecanismele de autentificare și control al accesului bazat pe roluri, precum și modul în care imaginile și alertele sunt transmise operatorului în timp real.
+
+\textbf{Capitolul~\ref{ch:testare}, \emph{Testarea și evaluarea sistemului}}, analizează performanțele soluției dezvoltate în raport cu obiectivele inițiale. Sunt prezentate metricile de precizie ale modelelor antrenate, timpii de răspuns măsurați pe întregul flux integrat de procesare și comportamentul general al aplicației în scenarii practice de utilizare.
+
+\textbf{Capitolul~\ref{ch:concluzii}, \emph{Concluzii și direcții de dezvoltare}}, oferă o sinteză a rezultatelor obținute, evaluează măsura în care au fost îndeplinite obiectivele lucrării și propune posibile direcții pentru extinderea și îmbunătățirea sistemului în viitor.
 
 \end{document}

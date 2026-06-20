@@ -10,7 +10,7 @@
     backend=bibtex,
     style=numeric,
     bibencoding=ascii,
-    sorting=anyt
+    sorting=none
 ]{biblatex}
 \usepackage{amssymb}
 \usepackage{caption}
@@ -39,6 +39,11 @@
 
 % Bibliography source
 \addbibresource{bibliography.bib}
+
+% Sectiunea de articole include si lucrarile de conferinta
+\defbibfilter{stiintific}{%
+    type=article or type=inproceedings or type=incollection
+}
 
 % Intent removal for table of content
 \setlength{\cftfigindent}{0 em}

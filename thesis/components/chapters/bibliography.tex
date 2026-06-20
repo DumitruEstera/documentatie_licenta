@@ -7,16 +7,21 @@
 
 \addcontentsline{toc}{chapter}{Bibliografie}
 
+\nocite{*}
+
 \section*{Cărți}
 \label{sec:bibliography_books}
-\nocite{*}
 
 \printbibliography[type=book,heading=none]
 
-\section*{Articole Științifice}
+\section*{Articole și lucrări științifice}
 \label{sec:bibliography_papers}
-\nocite{*}
 
-\printbibliography[type=article,heading=none]
+\printbibliography[filter=stiintific,heading=none]
+
+\section*{Resurse web, rapoarte și legislație}
+\label{sec:bibliography_web}
+
+\printbibliography[type=online,heading=none]
 
 \end{document}
