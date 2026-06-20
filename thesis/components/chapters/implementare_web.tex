@@ -7,58 +7,113 @@
 \chapter{Implementarea Aplicației Web}
 \label{ch:implementare_web}
 
-\section{Structura backend-ului FastAPI}
+Acest capitol prezintă implementarea componentelor software fundamentale ale sistemului, respectiv arhitectura backend dezvoltată cu ajutorul framework-ului FastAPI și interfața web realizată în React. Sunt analizate exclusiv modulele independente de componenta de inteligență artificială, aceasta fiind detaliată în Capitolul~\ref{ch:implementare_ai}. Pentru a evita repetarea aspectelor discutate în etapa de analiză și proiectare (Capitolul~\ref{ch:analiza_proiectare}), accentul este pus pe deciziile de implementare și pe modul concret în care acestea au fost transpuse la nivelul codului sursă.
+
+În continuare sunt prezentate organizarea proiectului software, implementarea mecanismelor de persistență a datelor, autentificare și sincronizare a camerelor video, precum și arhitectura aplicației web și structura principalelor pagini destinate utilizatorilor. Aspectele conceptuale definite anterior — inclusiv structura endpoint-urilor REST (Secțiunea~\ref{sec:api_rest}), protocolul de comunicație WebSocket (Secțiunea~\ref{sec:proiectare_websocket}), schema bazei de date (Secțiunea~\ref{sec:proiectare_db}), modelul de control al accesului (Secțiunea~\ref{sec:rbac}) și mecanismul de generare a alertelor (Secțiunea~\ref{sec:logica_alarme}) — nu sunt reluate în detaliu, fiind menționate doar în măsura în care contribuie la înțelegerea implementării practice a sistemului.
+
+
+\section{Organizarea codului backend}
 \label{sec:backend_fastapi}
 
-\section{Endpoint-ul WebSocket pentru streaming live}
-\label{sec:endpoint_websocket}
+Arhitectura componentei backend este structurată în jurul unei clase principale, \inlinecode{EnhancedSecuritySystemAPI}, definită în fișierul \inlinecode{app.py}. Aceasta înglobează instanța \inlinecode{FastAPI}, modulele de inteligență artificială, firele de execuție aferente fluxului de procesare (Capitolul~\ref{ch:analiza_proiectare}, Figura~\ref{fig:pipeline}) și starea partajată a aplicației.
 
-\section{Modelul de date și persistența}
-\label{sec:model_date}
+O abordare specifică de implementare constă în modul de definire a rutelor API. În loc de a fi separate în module externe de tip \inlinecode{APIRouter}, acestea sunt înregistrate ca funcții asincrone imbricate (\emph{closures}) în cadrul metodei \inlinecode{setup\_routes()}. Din motive de claritate, rutele sunt organizate logic pe categorii funcționale: autentificare, fluxuri video, controlul modulelor de analiză, gestiunea entităților (persoane, plăcuțe de înmatriculare, zone, camere, utilizatori), alerte, jurnale de sistem și statistici.
 
-\section{Sistemul de autentificare}
+Această abordare permite rutelor să acceseze direct starea internă a instanței curente, inclusiv colecția camerelor active, modulele de analiză AI și mecanismele utilizate pentru distribuirea datelor către clienți. În consecință, este redusă necesitatea introducerii unor mecanisme suplimentare de transmitere a dependențelor către fiecare rută, simplificând astfel implementarea și accesul la resursele partajate ale aplicației.
+
+\subsection{Injectarea dependențelor și validarea cererilor}
+
+Mecanismul de injectare a dependențelor pus la dispoziție de framework-ul FastAPI este utilizat exclusiv pentru gestionarea funcționalităților transversale, evitându-se folosirea acestuia pentru starea internă a aplicației. Astfel, verificarea autentificării și a permisiunilor asociate rolurilor este integrată în mod declarativ, prin intermediul parametrului \inlinecode{Depends}. Mai exact, fiecare rută protejată include \inlinecode{current\_user: dict = Depends(get\_current\_user)}, în timp ce rutele cu acces restricționat destinate administratorilor utilizează \inlinecode{Depends} \inlinecode{(require\_admin)}, aspecte detaliate în Secțiunea~\ref{sec:autentificare}.
+
+În ceea ce privește validarea conținutului cererilor HTTP, aceasta este realizată cu ajutorul unor modele Pydantic dedicate, precum \inlinecode{LoginRequest}, \linebreak \inlinecode{PersonRegistration}, \inlinecode{LicensePlateRegistration}, \inlinecode{CreateUserRequest} și \linebreak \inlinecode{UpdateUserRequest}. Aceste structuri garantează tipizarea și verificarea automată a datelor de intrare înainte ca acestea să fie procesate de logica aplicației. În situația în care datele furnizate sunt incorect formatate, sistemul interceptează automat cererea și returnează un cod de eroare de tip \inlinecode{422}.
+
+\subsection{Middleware, jurnalizare și interacțiunea cu firele de execuție}
+
+Singura componentă de tip \textit{middleware} configurată în mod explicit este \linebreak \inlinecode{CORSMiddleware}, definită prin metoda \inlinecode{setup\_cors()}. Aceasta permite interac-țiunea aplicației client din mediul de dezvoltare (\inlinecode{http://localhost:3000}), acceptând credențiale pentru toate metodele și anteturile HTTP. Jurnalizarea evenimentelor nu este realizată printr-un \textit{middleware} dedicat, ci utilizând modulul standard \inlinecode{logging}. Astfel, sunt generate mesaje marcate semantic, vizând evenimente precum autentificările reușite, respingerea jetoanelor de acces, înregistrarea noilor camere video sau declanșarea alertelor. Aceste informații sunt deosebit de utile pentru diagnosticarea erorilor și pentru monitorizarea funcționării sistemului în regim concurent.
+
+Un detaliu esențial de implementare, specific arhitecturii bazate pe fire de execuție multiple (Capitolul~\ref{ch:analiza_proiectare}), constă în modul de gestionare a interacțiunii dintre bucla de evenimente asincronă a framework-ului FastAPI și operațiile de intrare/ieșire blocante. Funcțiile care execută operații blocante, precum inițializarea unei surse video prin \inlinecode{cv2.VideoCapture} (proces care poate dura câteva secunde în cazul unei camere IP), nu sunt apelate direct pe bucla principală de evenimente. Pentru a preveni blocarea aplicației, aceste operații sunt delegate unui fir de execuție secundar prin intermediul metodei \inlinecode{asyncio.to\_thread(...)}. În absența acestei separări, o singură inițializare lentă ar întârzia sau ar bloca complet procesarea celorlalte cereri HTTP și a traficului de rețea. Transmiterea cadrelor procesate către utilizatori respectă același principiu de decuplare: firele responsabile cu analiza video depun mesajele rezultate în cozi de așteptare dedicate fiecărui client (\inlinecode{client\_queues}), de unde sunt preluate în mod asincron de funcția de gestionare a conexiunilor WebSocket, conform descrierii din Secțiunea~\ref{sec:fuziune}, subcapitolul~\ref{subsec:difuzare}.
+
+
+\section{Concretizarea proiectării: persistență, autentificare, sincronizarea camerelor}
 \label{sec:autentificare}
 
-\section{Modulele frontend-ului React}
+Această secțiune detaliază modul în care arhitectura propusă în Capitolul~\ref{ch:analiza_proiectare} este transpusă la nivelul codului, concentrându-se exclusiv pe aspectele practice de implementare și evitând reluarea argumentelor teoretice deja discutate.
+
+\subsection{Stratul de persistență}
+\label{subsec:persistenta}
+
+Mecanismul de persistență a fost implementat fără a utiliza un sistem de mapare obiect-relațională (ORM) sau un instrument dedicat pentru migrarea bazei de date. În schimb, s-a optat pentru un nivel simplificat de acces la date, definit prin clasa \inlinecode{DatabaseManager} din fișierul \inlinecode{database\_manager.py}. Aceasta interacționează direct cu driverul \inlinecode{psycopg2}, utilizând componenta \inlinecode{RealDict} \inlinecode{Cursor} pentru a extrage înregistrările sub formă de dicționare. Deoarece o conexiune \inlinecode{psycopg2} nu suportă în mod nativ accesul concurent (\emph{thread-safe}), iar aplicația utilizează multiple fire de execuție, conexiunea și cursorul aferent sunt izolate la nivelul fiecărui fir în parte, prin intermediul unui obiect de tip \inlinecode{threading.local} (\inlinecode{self.\_local}). Astfel, fiecare fir de execuție își inițializează propria conexiune la prima interogare, prevenind coliziunile între firele dedicate analizei video și cele responsabile cu gestionarea cererilor HTTP.
+
+Structura bazei de date, a cărei proiectare a fost detaliată în Secțiunea~\ref{sec:proiectare_db}, este inițializată automat la pornirea aplicației. Procesul utilizează instrucțiuni SQL idempotente de tipul \inlinecode{CREATE TABLE IF NOT EXISTS}. Această metodă garantează executarea lor sigură la fiecare inițializare și reprezintă o soluție eficientă care suplinește lipsa unui sistem complex de versionare a schemei relaționale.
+
+În ceea ce privește stocarea datelor biometrice, vectorii de caracteristici faciale sunt salvați în coloane de tip \inlinecode{BYTEA}, fiind transformați în format binar (serializați) cu ajutorul modulului \inlinecode{pickle}, procedură explicată în Capitolul~\ref{ch:implementare_ai}. Pentru a asigura integritatea bazei de date, operațiile concurente de scriere sunt sincronizate, acolo unde este necesar, prin mecanisme de excludere mutuală (\emph{locks}). Totodată, conflictele apărute la inserarea unor date duplicate sunt gestionate în mod explicit prin capturarea excepției \inlinecode{psycopg2.IntegrityError}.
+
+\subsection{Implementarea autentificării și a controlului de rol}
+
+Modelul de control al accesului bazat pe roluri (\emph{Role-Based Access Control} -- RBAC) a fost fundamentat teoretic în Secțiunea~\ref{sec:rbac}. Această subsecțiune descrie transpunerea sa la nivelul codului sursă. Pentru a garanta securitatea datelor, parolele nu sunt stocate niciodată în format text (\emph{in cleartext}). Metoda \inlinecode{hash\_password()} generează un rezumat criptografic utilizând algoritmul \inlinecode{bcrypt}, apelând \inlinecode{bcrypt.hashpw} împreună cu o componentă aleatoare generată prin \inlinecode{gensalt()}. Verificarea credențialelor la momentul autentificării se realizează exclusiv prin funcția \inlinecode{bcrypt.checkpw} în cadrul metodei \inlinecode{verify\_} \inlinecode{password()}, evitându-se complet orice formă de decriptare a valorii stocate.
+
+Gestiunea sesiunilor utilizatorilor este realizată prin intermediul token-urilor JWT (\emph{JSON Web Tokens}), configurate cu algoritmul \inlinecode{HS256} și o perioadă de valabilitate de 8 ore. Cheia criptografică necesară semnării este preluată exclusiv din variabila de mediu \inlinecode{JWT\_SECRET}, fiind impusă o lungime minimă de 32 de caractere. Pentru a preveni vulnerabilitățile, în regim de producție inițializarea aplicației este oprită dacă această variabilă lipsește, evitându-se astfel emiterea token-urilor cu o cheie temporară. În plus față de revendicările standard (\emph{claims}), fiecare token integrează un identificator unic (\inlinecode{jti}), facilitate care permite revocarea sa instantanee în caz de necesitate.
+
+Mecanismul de verificare a permisiunilor este implementat printr-o ierarhie de dependențe specifice framework-ului FastAPI:
+
+\begin{itemize} \item Funcția \inlinecode{get\_current\_user()} decodifică token-ul și îl validează riguros la fiecare cerere HTTP, interogând direct baza de date. Astfel, sunt respinse token-urile aflate pe lista de revocare, verificate prin intermediul funcției \inlinecode{is\_token\_revoked(jti)} pe structura \inlinecode{revoked\_tokens}, precum și cele care aparțin unor utilizatori eliminați din sistem. Mai mult, nivelul de acces este extras din baza de date, ignorându-se valoarea stocată inițial în token. Această abordare garantează că modificările de rol sau ștergerea unui cont produc efecte imediat, la următoarea cerere, fără a aștepta expirarea naturală a sesiunii.
+	\item Funcția \inlinecode{require\_admin()} reprezintă o dependență suplimentară, construită peste cea anterioară. Aceasta returnează codul de eroare \inlinecode{HTTP 403} dacă rolul utilizatorului nu este \inlinecode{admin}. Aceeași regulă de autorizare guvernează atât accesul la nivelul API-ului, cât și afișarea condiționată a elementelor din interfața grafică, aspect detaliat în Secțiunea~\ref{subsec:fe_arhitectura}.
+\end{itemize}
+
+Deoarece browserele web nu permit configurarea antetului \inlinecode{Authorization} pentru conexiunile de tip WebSocket, autentificarea pe canalul de transmisie continuă (\emph{streaming}) este gestionată diferit comparativ cu rutele REST. Token-ul de acces este transmis sub forma unui parametru de interogare în adresa URL (\inlinecode{/ws?token=...}). Funcția responsabilă cu gestionarea conexiunii validează acest token, verificând inclusiv apartenența la lista de revocare și starea contului de utilizator. În cazul în care validarea eșuează, conexiunea este respinsă înainte de a fi inițializată, returnându-se codul de eroare \inlinecode{1008} (\emph{policy violation}).
+
+\subsection{Sincronizarea camerei dinamice cu registrul de camere}
+\label{subsec:sincronizare_camere}
+
+Sistemul face distincția între camera video locală (atașată direct echipamentului și rezervată sub identificatorul \inlinecode{CAM-01}, fiind înregistrată automat la inițializare) și camerele IP adăugate dinamic prin intermediul interfeței utilizator. Acestea din urmă sunt integrate apelând ruta \inlinecode{/api/streams}, utilizând o structură de date de forma \inlinecode{{source: "ip", url, camera\_id, location}}.
+
+Mecanismul de implementare gestionează în mod explicit scenariile de eroare, având în vedere posibilitatea ca o sursă IP să fie indisponibilă sau ca adresa de rețea specificată să fie incorectă. Inițializarea fluxului video se realizează în afara buclei principale de evenimente, apelând metoda \inlinecode{asyncio.to\_thread(cv2.} \linebreak \inlinecode{VideoCapture, url)}, în timp ce starea conexiunii este validată prin funcția \inlinecode{isOpened()}. În situația în care deschiderea fluxului eșuează, resursele alocate sunt eliberate imediat, iar un mesaj de eroare este transmis aplicației client, prevenind astfel blocarea resurselor sistemului.
+
+În cazul unei conexiuni reușite, dispozitivul este înregistrat simultan în două locații complementare. Prima locație este memoria volatilă a aplicației, reprezentată de dicționarul \inlinecode{self.cameras}, care este accesat direct de firele de execuție pentru procesarea imaginilor. A doua locație este baza de date, unde informația este salvată în mod persistent prin intermediul funcției \inlinecode{upsert\_} \linebreak \inlinecode{camera()}. Această dublă înregistrare a fost implementată intenționat. Salvarea persistentă garantează că asocierea dintre o cameră și o zonă monitorizată, element central pentru logica de generare a alertelor detaliată în Secțiunea~\ref{sec:logica_alarme}, este păstrată inclusiv după repornirea sistemului, eliminând astfel necesitatea unei noi configurări manuale.
+
+Pentru a optimiza performanța și a evita interogarea bazei de date la procesarea fiecărui cadru video, relația dintre dispozitiv și zona supravegheată este stocată într-o memorie temporară locală (\inlinecode{\_camera\_zone\_cache}). Suplimentar, dacă un identificator \inlinecode{camera\_id} există deja în sistem, fluxul video anterior este închis și eliberat în mod corespunzător înainte de a fi înlocuit, prevenindu-se astfel acumularea conexiunilor deschise în fundal.
+
+\section{Arhitectura frontend-ului React}
+\label{subsec:fe_arhitectura}
+
+Interfața grafică este dezvoltată sub forma unei aplicații React 19, inițializată prin intermediul utilitarului \textit{Create React App}. Pentru stilizarea vizuală a fost utilizat framework-ul Tailwind CSS, în timp ce elementele grafice (pictogramele) sunt preluate din biblioteca \inlinecode{lucide-react}. La nivel arhitectural, aplicația nu depinde de o bibliotecă externă pentru gestionarea rutelor de navigare (\emph{routing}). În schimb, componenta principală \inlinecode{App.js} menține o stare internă denumită \inlinecode{activeTab}, iar trecerea de la o secțiune la alta se realizează prin randare condiționată. Navigarea propriu-zisă este delegată componentei \inlinecode{Sidebar}, căreia îi este transferată funcția \inlinecode{onNavigate={setActiveTab}}. În paralel, componenta \inlinecode{Header} nu influențează secțiunea activă, având exclusiv rolul de a extinde meniul lateral, de a afișa starea conexiunii și de a oferi opțiunea de deconectare. Această abordare este optimă pentru o interfață de tip panou de control (\emph{dashboard}), caracterizată printr-un număr prestabilit și fix de secțiuni.
+
+Gestiunea sesiunii utilizatorului se bazează pe stocarea locală a datelor în navigatorul web (\inlinecode{localStorage}), utilizând cheile \inlinecode{auth\_token} și \inlinecode{auth\_user}. Această metodă garantează menținerea stării de autentificare chiar și în eventualitatea reîncărcării paginii. Drepturile de acces în interfață sunt gestionate prin intermediul variabilei derivate \inlinecode{isAdmin}. Aceasta condiționează afișarea secțiunilor dedicate administratorilor, reprezentând o restricție de natură vizuală care dublează și completează verificarea de securitate \inlinecode{require\_admin} implementată la nivelul serverului, conform descrierii din Secțiunea~\ref{sec:autentificare}. Comunicația cu interfața de programare (API) este centralizată cu ajutorul constantei \inlinecode{API\_} \linebreak \inlinecode{BASE} și al funcției utilitare \inlinecode{getAuthHeaders()}, care are rolul de a include automat antetul de autorizare (\inlinecode{Authorization: Bearer }) în fiecare cerere HTTP de tip \inlinecode{fetch}.
+
+Inițializarea conexiunii continue prin protocolul WebSocket se realizează în cadrul unei funcții \inlinecode{useEffect}, token-ul de autentificare fiind transmis sub forma unui parametru de interogare. În situația unei întreruperi, aplicația client inițiază automat o tentativă de reconectare după un interval de trei secunde. Face excepție scenariul în care serverul a terminat conexiunea returnând codul de eroare \inlinecode{1008} (token respins), caz în care reconectarea este anulată, fiind considerată inutilă. Un element arhitectural definitoriu este \emph{rolul simplificat al aplicației client în redarea video}. Cadrele recepționate prin rețea sunt deja procesate vizual la nivelul serverului, adnotările (precum casetele de delimitare și etichetele descriptive) fiind aplicate direct pe imagine în etapa de fuziune a datelor (Secțiunea~\ref{sec:fuziune}). Prin urmare, interfața web nu efectuează operații costisitoare de decodare a imaginii sau de desenare grafică. Aceasta se limitează la a atribui șirul de caractere codificat în format Base64 atributului \inlinecode{src} al unui element HTML de tip \inlinecode{<img>} (sub forma \inlinecode{data:image/jpeg;base64,...}). Metadatele asociate detecțiilor, care însoțesc fiecare cadru, sunt valorificate exclusiv pentru actualizarea componentelor adiacente din interfață (panourile destinate alertelor și activității recente), nefiind implicate în randarea propriu-zisă a \linebreak fluxului video.
+
+\section{Paginile aplicației}
 \label{sec:module_frontend}
 
-\subsection{Autentificare}
-\label{subsec:fe_autentificare}
+Interfața grafică a aplicației este structurată în trei categorii de pagini: secțiunea de monitorizare în timp real, secțiunea destinată administrării entităților (care integrează operațiile standard de gestionare a datelor, de tip CRUD) și secțiunea operațională, dedicată alertelor, jurnalelor de sistem și statisticilor. Deoarece arhitectura generală de navigare a fost deja abordată în Secțiunea~\ref{sec:interfata_utilizator}, subcapitolele următoare se concentrează exclusiv pe detalierea modului în care a fost implementată la nivel de cod fiecare dintre aceste categorii.
 
-\subsection{Vizualizarea live a camerelor (Dashboard)}
+\subsection{Monitorizare live și controlul modulelor (Dashboard)}
 \label{subsec:fe_dashboard}
 
-\subsection{Activarea/Dezactivarea modulelor AI}
-\label{subsec:fe_module_ai}
+Panoul principal de control, implementat prin intermediul componentei \linebreak \inlinecode{CameraGrid}, prezintă o rețea de panouri destinate afișării fluxurilor video. Sursa video locală, identificată prin \inlinecode{CAM-01}, este disponibilă în mod implicit. În paralel, camerele IP sunt adăugate dinamic în interfață pe măsură ce primele cadre sunt recepționate prin protocolul WebSocket. Mai exact, funcția responsabilă cu procesarea mesajelor generează un nou panou de redare atunci când detectează un identificator \inlinecode{camera\_id} nou. Fiecare secțiune redă fluxul video sub forma unui element HTML de tip \inlinecode{<img>}, utilizând imagini codificate în format Base64. Prin selectarea unui anumit panou, utilizatorul poate deschide o fereastră modală care mărește imaginea respectivă, în timp ce un indicator vizual semnalează imediat dispozitivele care au înregistrat alerte active.
 
-\subsection{Gestiunea persoanelor (CRUD)}
-\label{subsec:fe_persoane}
+Activarea și dezactivarea celor șase module de inteligență artificială sunt gestionate prin componenta \inlinecode{IntelligenceSettings}. Aceasta pune la dispoziție o serie de elemente de control pentru fiecare funcționalitate în parte (recunoașterea facială, citirea plăcuțelor de înmatriculare, analiza demografică, detectarea incendiilor și a fumului, recunoașterea acțiunilor umane și identificarea armelor). Fiecare acțiune de comutare inițiază o cerere către punctul terminal (\emph{endpoint}) corespunzător, cum ar fi \inlinecode{/api/face/toggle}. Această modificare de stare se aplică \emph{în timp real, fără a necesita repornirea sistemului}. Firele de execuție dedicate analizei video verifică, pentru fiecare cadru procesat, variabilele de stare partajate pe care aceste cereri le actualizează. Prin urmare, un modul dezactivat este pur și simplu exclus din fluxul curent de procesare, mecanism aliniat cu principiile de dezactivare selectivă argumentate în Capitolul~\ref{ch:analiza_proiectare}.
 
-\subsection{Gestiunea zonelor}
-\label{subsec:fe_zone}
+\subsection{Administrarea entităților (operații CRUD)}
 
-\subsection{Gestiunea camerelor}
-\label{subsec:fe_camere}
+Paginile destinate administrării entităților (persoane, zone, camere video, plăcuțe de înmatriculare și utilizatori) sunt dezvoltate pe baza unei arhitecturi și a unui model de implementare unitar. Fiecare interfață integrează o listă prevăzută cu filtre de căutare, un formular pentru crearea sau modificarea înregistrărilor, precum și opțiuni pentru ștergerea acestora. Toate aceste componente comunică cu rutele REST, detaliate în Secțiunea~\ref{sec:api_rest}, prin intermediul unor apeluri de rețea autentificate de tip \inlinecode{fetch}. Pentru a evita o prezentare repetitivă a acestor elemente comune, în continuare sunt evidențiate exclusiv particularitățile funcționale ale fiecărei pagini:
 
-\subsection{Gestiunea plăcuțelor de înmatriculare}
-\label{subsec:fe_placute}
+\begin{itemize} 
+	\item \textbf{Persoane} (\inlinecode{PersonManagement}): formularul de înregistrare preia date referitoare la nume, identificatorul de angajat, departament și zonele de acces permise. O funcționalitate specifică este posibilitatea de încărcare a mai multor imagini pentru același individ. Acestea sunt transmise către punctul terminal \inlinecode{/api/persons//faces} sub forma unui câmp multiplu de tip \inlinecode{files}. Vectorii de caracteristici faciale sunt generați la nivelul serverului, conform mecanismului descris în Capitolul~\ref{ch:implementare_ai}. În plus, interfața permite vizualizarea unui istoric detaliat al accesărilor pentru fiecare persoană înregistrată.
+	\item \textbf{Zone} (\inlinecode{ZoneManagement}): secțiunea permite definirea numelui zonei și marcarea acesteia ca fiind \emph{restricționată} prin intermediul atributului \linebreak \inlinecode{is\_restricted}. Este important de precizat că drepturile de acces ale angajaților nu sunt alocate din această pagină, ci din interfața dedicată gestionării persoanelor, unde se configurează lista zonelor autorizate pentru fiecare individ. Aceste atribute sunt ulterior valorificate de logica de generare a alertelor.
+	\item \textbf{Camere} (\inlinecode{CameraManagement}): facilitează înregistrarea noilor dispozitive video, asocierea acestora cu o zonă specifică și configurarea parametrilor fluxului de date (nume, adresă URL). Sistemul garantează păstrarea acestor setări în mod persistent, inclusiv după repornirea aplicației, aspect detaliat în Secțiunea~\ref{subsec:sincronizare_camere}.
+	\item \textbf{Plăcuțe de înmatriculare} (\inlinecode{PlateManagement}): asigură introducerea datelor vehiculelor, incluzând numărul de înmatriculare, identitatea proprietarului, tipul vehiculului și starea de autorizare.
+	\item \textbf{Utilizatori} (\inlinecode{UserManagement}): această pagină pune la dispoziție instrumentele necesare pentru crearea noilor conturi (atribuirea rolurilor \inlinecode{admin} sau \inlinecode{user}), modificarea nivelurilor de acces, reinițializarea parolelor și eliminarea conturilor existente.
+\end{itemize}
 
-\subsection{Gestiunea alarmelor}
-\label{subsec:fe_alarme}
+\subsection{Paginile operaționale: alarme, jurnale și statistici}
 
-\subsection{Jurnale de activitate}
-\label{subsec:fe_jurnale}
+A treia categorie de pagini din cadrul interfeței web este proiectată pentru a sprijini direct activitatea operatorului de supraveghere. Componenta \inlinecode{AlarmManagement} afișează un registru al alertelor generate, permițând filtrarea acestora în funcție de starea curentă, tipul evenimentului și nivelul de severitate. Interfața oferă posibilitatea de a vizualiza imaginea captată (\emph{snapshot}) exact în momentul detecției. Totodată, operatorul poate marca o alertă ca fiind \emph{rezolvată} (\inlinecode{resolved}) sau ca o \emph{alarmă falsă} (\inlinecode{false\_alarm}), având și opțiunea de a adăuga observații operaționale specifice. Sistemul suportă actualizarea simultană a mai multor alerte selectate.
 
-\subsection{Statistici și KPI-uri}
-\label{subsec:fe_statistici}
+Componenta \inlinecode{Logs} oferă acces la istoricul complet al detecțiilor înregistrate de sistem. Aceasta integrează funcționalități de căutare și filtrare pe baza unor criterii precum tipul detecției, camera sursă, starea alarmei, intervalul temporal sau expresii introduse prin căutare liberă. De asemenea, rezultatele obținute în urma filtrării pot fi exportate în format CSV, facilitând prelucrarea și analiza ulterioară a datelor.
 
-\subsection{Gestiunea utilizatorilor}
-\label{subsec:fe_utilizatori}
+Componenta \inlinecode{Statistics} furnizează o sinteză a informațiilor colectate pentru intervale de timp predefinite (ultimele 24 de ore, ultimele 7 zile și ultimele 30 de zile). Interfața prezintă indicatori statistici relevanți, precum numărul total de detecții, distribuția acestora pe categorii, camere video și niveluri de severitate, precum și evoluția temporală a evenimentelor. În plus, sunt calculați indicatori de performanță asociați sistemului de alertare, incluzând numărul total de alerte generate, numărul alertelor nerezolvate și incidența evenimentelor critice.
 
-\section{Logica de business pentru declanșarea alertelor}
-\label{sec:logica_business}
-
-\section{Sincronizarea camerei conectate dinamic cu registrul de camere}
-\label{sec:sincronizare_camere}
+O imagine de ansamblu asupra celor mai recente evenimente este disponibilă în permanență prin intermediul componentei \inlinecode{RecentActivity}, care afișează în timp real activitatea recentă înregistrată de sistem.
 
 \end{document}

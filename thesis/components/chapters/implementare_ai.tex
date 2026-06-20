@@ -114,8 +114,7 @@ Spre deosebire de pipeline-urile clasice de recunoaștere facială, care înlăn
 un detector de fețe, un model separat de extragere a vectorilor de caracteristici și încă
 unul pentru estimarea atributelor demografice, implementarea de față consolidează
 toate aceste sarcini într-o singură trecere prin pachetul de modele
-\textbfit{buffalo\_s} al framework-ului InsightFace, ale cărui fundamente
-teoretice au fost prezentate în secțiunea~\ref{sec:recunoastere_faciala}.
+\textbfit{buffalo\_s} al framework-ului InsightFace.
 
 Pipeline-ul intern al modulului are patru etape, descrise în subcapitolele care
 urmează: (1)~detecția fețelor și extragerea reprezentărilor vectoriale cu InsightFace,
@@ -1002,8 +1001,7 @@ Figura~\ref{fig:har_pipeline} oferă o imagine de ansamblu a întregului proces,
 \subsection{Justificarea alegerii SlowFast R50}
 \label{subsec:justificare_slowfast}
 
-Arhitectura aleasă este \textbfit{SlowFast R50}, dezvoltată de Facebook AI Research, ale cărei
-fundamente au fost prezentate în secțiunea~\ref{subsec:slowfast}. Ea se bazează pe două căi de
+Arhitectura aleasă este \textbfit{SlowFast R50}, dezvoltată de Facebook AI Research. Ea se bazează pe două căi de
 procesare paralele: o cale \textit{Slow}, care procesează puține cadre la rezoluție temporală
 redusă și captează informația semantică spațială, și o cale \textit{Fast}, care procesează multe
 cadre și captează dinamica mișcării, cele două fiind unite prin conexiuni laterale. Această
