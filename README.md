@@ -1,6 +1,5 @@
 # Lucrare de Licență – Soluție inteligentă de analiză a înregistrărilor video
 
-Schelet LaTeX pentru lucrarea de licență a lui **Dumitru Estera**, construit peste șablonul [iosifache/Thesis-Diploma-Templates](https://github.com/iosifache/Thesis-Diploma-Templates) (Academia Tehnică Militară „Ferdinand I" București, Facultatea de Sisteme Informatice și Securitate Cibernetică).
 
 Fiecare capitol există ca fișier `.tex` separat, populat doar cu titlul capitolului și ierarhia de secțiuni/subsecțiuni. Conținutul propriu-zis se adaugă manual.
 
