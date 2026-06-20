@@ -23,8 +23,67 @@ Mai mult decât simpla clasificare și filtrare a alarmelor false, Deep Learning
 \section{Soluții comerciale existente}
 \label{sec:solutii_comerciale}
 
+Piața sistemelor de supraveghere video este dominată în prezent de soluții comerciale robuste, dezvoltate de companii consacrate. Deși aceste platforme oferă capabilități avansate de inteligență artificială, ele funcționează ca sisteme închise (\emph{closed-source}), impunând adesea restricții legate de hardware și costuri recurente semnificative. În continuare sunt analizate trei dintre cele mai reprezentative produse din această categorie, pentru a evidenția limitările care motivează abordarea propusă în prezenta lucrare.
+
+\subsubsection*{1. Verkada}
+Verkada este o platformă modernă de securitate, nativă în cloud (SaaS - \emph{Software as a Service}), recunoscută pentru ușurința în instalare și managementul centralizat \cite{verkada_overview}.
+\begin{itemize}
+	\item \textbf{Capabilități AI declarate:} Sistemul integrează algoritmi de analiză video la nivel de procesor (\emph{edge computing}) capabili de detectarea persoanelor și a vehiculelor, recunoașterea atributelor faciale și a culorii hainelor, recunoașterea plăcuțelor de înmatriculare (LPR) și detectarea comportamentelor neobișnuite \cite{verkada_overview}.
+	\item \textbf{Model de licențiere:} Utilizarea platformei necesită plata unei licențe software anuale pentru fiecare cameră în parte (cuprinsă adesea între 200 și 1800 USD per an/dispozitiv).
+	\item \textbf{Limitări observate:} Cea mai mare constrângere este \emph{dependența totală de hardware-ul producătorului} (\emph{vendor lock-in}). Platforma software \linebreak Verkada funcționează exclusiv cu camerele produse de ei \cite{verkada_security}. În plus, costul total de proprietate (TCO - \emph{Total Cost of Ownership}) crește masiv pe termen lung din cauza licențelor recurente, iar dependența de cloud poate fi un dezavantaj pentru instituțiile care impun izolarea strictă a datelor.
+\end{itemize}
+
+\subsubsection*{2. Avigilon (Motorola Solutions)}
+Avigilon este unul dintre liderii tradiționali ai pieței de sisteme de management video (VMS), oferind soluții hibride și \emph{on-premise} destinate mediului \emph{enterprise} \cite{avigilon_appearance}.
+\begin{itemize}
+	\item \textbf{Capabilități AI declarate:} Tehnologia sa de vârf, \emph{Avigilon Appearance Search}, permite căutarea rapidă a persoanelor și vehiculelor în zeci de fluxuri video simultan \cite{avigilon_docs}. Oferă, de asemenea, LPR, detecția mișcărilor neobișnuite (\emph{Unusual Motion Detection}) și integrare profundă cu sistemele de control al accesului.
+	\item \textbf{Model de licențiere:} Licențierea este modulară, presupunând o achiziție inițială substanțială (per server și per canal/cameră), plus costuri suplimentare pentru modulele de analiză AI avansată și actualizări de mentenanță.
+	\item \textbf{Limitări observate:} Deși software-ul poate accepta camere de la terți (prin protocolul ONVIF), obținerea performanțelor AI maxime și utilizarea anumitor algoritmi necesită achiziționarea fie a camerelor Avigilon cu AI integrat, fie a unor echipamente de procesare dedicate (\emph{Avigilon AI Appliances}) \cite{avigilon_appearance}. Sistemul funcționează ca o „cutie neagră” și presupune bugete inaccesibile utilizatorilor de rând sau organizațiilor mici.
+\end{itemize}
+
+\subsubsection*{3. BriefCam}
+BriefCam este o soluție software pură, faimoasă pentru inovația sa în domeniul \emph{Video Synopsis} (rezumarea video), capabilă să suprapună evenimentele din momente diferite pe un singur fundal static pentru a condensa ore de înregistrări în câteva minute de vizionare \cite{briefcam_datasheet}.
+\begin{itemize}
+	\item \textbf{Capabilități AI declarate:} Oferă analiză video avansată în timp real și post-eveniment: extragerea datelor demografice (vârstă, gen), LPR, recunoaștere facială, clasificarea precisă a obiectelor și analiza comportamentală complexă (direcție, staționare, viteză) \cite{briefcam_datasheet}.
+	\item \textbf{Model de licențiere:} Costurile sunt foarte ridicate, sistemul fiind destinat aplicațiilor critice (guvernamentale, aeroporturi, orașe inteligente). Licențierea se face pe pachete de bază la care se adaugă costuri per canal video procesat și per utilizator concurent.
+	\item \textbf{Limitări observate:} Pe lângă modelul opac de procesare a datelor, algoritmii săi complecși impun o barieră hardware majoră. Sistemul necesită achiziționarea unor servere \emph{on-premise} extrem de puternice, echipate cu multiple plăci video dedicate (GPU) din gama enterprise, crescând masiv complexitatea instalării și a mentenanței \cite{briefcam_hardware}.
+\end{itemize}
+
+\subsubsection*{Concluzii privind soluțiile comerciale}
+Deși produsele prezentate mai sus demonstrează nivelul ridicat de performanță la care a ajuns viziunea artificială aplicată în securitate, ele confirmă limitările identificate în Secțiunea~\ref{sec:motivatie}. Dependența de hardware proprietar (precum în cazul Verkada și, parțial, Avigilon), costurile uriașe de licențiere și lipsa de transparență a modului în care rețelele neuronale iau decizii justifică pe deplin nevoia unei alternative. Soluția dezvoltată în cadrul prezentei lucrări demonstrează că funcționalitățile esențiale — precum identificarea vehiculelor, detectarea armelor și analiza comportamentului — pot fi implementate utilizând exclusiv tehnologii cu sursă deschisă (\emph{open-source}), rezultând o arhitectură transparentă, adaptabilă și independentă de costuri de licențiere.
+
+
+
 \section{Soluții open-source și academice}
 \label{sec:solutii_open_source}
+
+Alternativa la sistemele comerciale o reprezintă comunitatea cu sursă deschisă (\emph{open-source}) și cercetarea academică. Aceste inițiative elimină costurile de licențiere și dependența de hardware-ul proprietar, dar vin adesea cu limitări în ceea ce privește optimizarea pentru cazuri de utilizare foarte specifice sau lipsa unei arhitecturi software moderne, pregătite pentru utilizatori finali. Mai jos sunt analizate trei exemple relevante.
+
+\subsubsection*{1. Frigate NVR}
+Frigate este unul dintre cele mai populare sisteme de tip NVR (\emph{Network Video Recorder}) din comunitatea open-source, fiind construit nativ în jurul conceptului de inteligență artificială \cite{frigate_nvr}.
+\begin{itemize}
+	\item \textbf{Capabilități AI declarate:} Rulează inferență AI complet locală, evitând transmiterea datelor în cloud. Este capabil să analizeze fluxuri video în timp real și este optimizat pentru a folosi acceleratoare hardware precum Google Coral Edge TPU, Intel OpenVINO sau NVIDIA TensorRT \cite{frigate_nvr}. Oferă integrare nativă profundă cu platforme de automatizare precum Home Assistant.
+	\item \textbf{Model de licențiere:} Complet gratuit și open-source (licență MIT).
+	\item \textbf{Limitări față de soluția propusă:} Principala limitare a platformei constă în faptul că modelele AI furnizate implicit, antrenate în general pe seturi de date precum COCO, sunt concepute pentru detecția unor categorii de obiecte de interes general. Implementarea unor funcționalități specializate presupune integrarea și configurarea unor modele personalizate suplimentare. Astfel, în timp ce Frigate este orientat în principal către scenarii de monitorizare și automatizare specifice mediului \emph{smart home}, soluția propusă în această lucrare este dezvoltată pentru a răspunde cerințelor specifice aplicațiilor de securitate și supraveghere inteligentă.
+\end{itemize}
+
+\subsubsection*{2. ZoneMinder}
+ZoneMinder este una dintre cele mai cunoscute platforme VMS (Video Management System) din ecosistemul open-source, fiind dezvoltată și întreținută în mod continuu de peste două decenii \cite{zoneminder_docs}.
+\begin{itemize}
+	\item \textbf{Capabilități AI declarate:} Platforma oferă suport pentru un număr mare de camere IP prin protocolul RTSP și include funcționalități avansate pentru gestionarea înregistrărilor și filtrarea evenimentelor pe baza unor zone definite de utilizator. În versiunile recente, au fost integrate și funcționalități de recunoaștere a obiectelor prin intermediul unor mecanisme externe bazate pe scripturi și \emph{webhook}-uri (de exemplu, servere de evenimente care interoghează scripturi Python) \cite{zoneminder_docs}.
+	\item \textbf{Model de licențiere:} Gratuit și open-source (licență GPL).
+	\item \textbf{Limitări față de soluția propusă:} ZoneMinder utilizează o arhitectură monolitică, implementată preponderent în C++ și PHP. Deși oferă un set extins de funcționalități, integrarea componentelor de inteligență artificială se realizează prin mecanisme suplimentare, externe fluxului principal de procesare. În multe configurații, analiza bazată pe AI este declanșată doar după detectarea unei modificări la nivelul imaginii (detecția clasică a mișcării), ceea ce poate introduce întârzieri suplimentare în procesarea evenimentelor. În contrast, sistemul propus în această lucrare, construit pe baza tehnologiilor FastAPI și React, adoptă o arhitectură separată pentru backend și frontend și efectuează inferența direct asupra fluxului video, reducând astfel latența procesării.
+\end{itemize}
+
+\subsubsection*{3. Implementări academice bazate pe YOLO (Custom Pipelines)}
+O mare parte din literatura de specialitate modernă explorează utilizarea algoritmilor de detecție din familia YOLO (versiunile v5, v8, v10) specific pentru domeniul securității.
+\begin{itemize}
+	\item \textbf{Capabilități AI declarate:} Cercetările academice demonstrează că modelele YOLO antrenate pe seturi de date specifice ating o precizie excelentă (mAP, F1-Score) și un FPS ridicat în detecția armelor albe sau de foc, identificând amenințările în fracțiuni de secundă direct din imagini CCTV \cite{fierro2026,mandal2026}.
+	\item \textbf{Model de licențiere:} Surse deschise (adesea scripturi publicate pe \linebreak GitHub în scop de cercetare) \cite{mandal2026}.
+	\item \textbf{Limitări față de soluția propusă:} Majoritatea cercetărilor academice se opresc la stadiul de „Proof of Concept” (PoC). Soluțiile prezentate în lucrări științifice sunt, de regulă, simple scripturi izolate de Python care analizează videoclipuri preînregistrate sau cadre individuale \cite{fierro2026,mandal2026}. Acestora le lipsește complet un ecosistem aplicativ real: nu dețin un server backend care să gestioneze mai multe conexiuni RTSP, nu oferă o bază de date pentru stocarea și alertarea evenimentelor și nici o interfață grafică interactivă. Chiar și abordările academice mai avansate, care integrează un sistem complet de tip IoT cu notificări și control hardware \cite{khan2026}, rămân prototipuri proof-of-concept dedicate unui scenariu restrâns, fără a oferi un produs software generic end-to-end. Soluția propusă depășește acest stadiu teoretic, transformând modelele AI într-un produs software complet end-to-end.
+\end{itemize}
+
+Așa cum reiese din analiza realizată, soluțiile existente din ecosistemul open-source prezintă o serie de limitări în raport cu obiectivele urmărite în această lucrare. Unele platforme sunt concepute ca soluții generale de supraveghere video și nu sunt optimizate pentru scenarii specifice, în timp ce altele se bazează pe arhitecturi software dezvoltate pentru cerințe tehnologice anterioare sau sunt prezentate exclusiv în context experimental și de cercetare. Prin integrarea unor modele YOLO personalizate într-o stivă tehnologică modernă, bazată pe \linebreak FastAPI pentru serviciile backend și React pentru interfața utilizatorului, proiectul propus urmărește să combine performanța modelelor de detecție validate în literatura de specialitate cu cerințele de scalabilitate, modularitate și utilizare practică specifice unei aplicații software complete.
 
 \section{Stadiul cercetării în domeniile relevante}
 \label{sec:stadiul_cercetarii}
