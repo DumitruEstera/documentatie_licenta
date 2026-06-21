@@ -1,19 +1,25 @@
+\chapter*{Rezumat}
+
+\thispagestyle{front}
+
+Prezenta lucrare abordează problema automatizării supravegherii video prin dezvoltarea unui sistem inteligent de analiză a fluxurilor video în timp real. Motivația cercetării constă în limitările monitorizării realizate exclusiv de operatori umani, a căror capacitate de a monitoriza simultan multiple fluxuri video scade pe durata supravegherii prelungite. În acest context, este propusă și implementată o aplicație software integrată, capabilă să asiste procesul de supraveghere prin identificarea automată a unor evenimente și obiecte de interes.
+
+Obiectivul principal al lucrării constă în proiectarea și implementarea unei arhitecturi software unificate care integrează cinci sarcini de viziune artificială asupra acelorași fluxuri video: recunoaștere facială cu autorizare pe zone și profilare demografică, recunoașterea optică a plăcuțelor de înmatriculare, detecția armelor, detecția incendiilor și a fumului, precum și recunoașterea acțiunilor umane. Contribuția principală constă în integrarea eficientă a acestor componente într-un flux unitar de procesare, completată de antrenarea a două modele dedicate pentru scenarii insuficient acoperite public.
+
+Din punct de vedere arhitectural, sistemul este implementat ca o aplicație monolitică, organizată în jurul unui flux concurent de procesare alcătuit din șapte fire de execuție: un fir pentru captură, cinci fire dedicate modulelor de analiză și un fir responsabil de fuziunea rezultatelor. Modelele sunt încărcate o singură dată în memorie și partajează resursele GPU, iar procesarea asincronă bazată pe politica „ultimul cadru disponibil” permite menținerea unei latențe sub 100 ms per cadru. Componenta de backend este dezvoltată utilizând framework-ul FastAPI și oferă un API REST împreună cu un canal WebSocket pentru transmiterea în timp real a cadrelor procesate, în timp ce interfața utilizator este implementată în React și include autentificare bazată pe JWT și control al accesului pe roluri (RBAC).
+
+Sistemul integrează modele consacrate din domeniul viziunii artificiale, precum InsightFace, EasyOCR, detectoare din familia YOLO și modelul SlowFast. În plus, au fost dezvoltate două componente proprii: un detector de arme bazat pe YOLOv8m, ajustat fin pe un set de date combinat, care obține un scor mAP@0,5 de 0,947, și un modul de recunoaștere a acțiunilor bazat pe SlowFast-R50, antrenat pe un set de date creat special pentru identificarea actelor de vandalism, atingând o acuratețe de 94,33\%. Rezultatele experimentale demonstrează performanța modulelor dezvoltate și fezabilitatea arhitecturii propuse, capabilă să funcționeze în timp real pe echipamente accesibile.
+
+\newpage
+
 \chapter*{Abstract}
 
 \thispagestyle{front}
 
-{
-    \color{gray}
-    This is the abstract of the thesis, written after finishing all the other components of the document (especially the chapters). It broadly presents the objectives and the achievements of the thesis. It is present in both Romanian and English. 
-}
+This thesis addresses the automation of video surveillance through an intelligent system for real-time video stream analysis. The motivation stems from the limitations of human operators, whose ability to monitor multiple video streams simultaneously decreases over prolonged surveillance. To address this challenge, the thesis proposes and implements an integrated software application capable of assisting the surveillance process by automatically identifying relevant events and objects of interest.
 
-\newpage
+The primary objective is the design and implementation of a unified software architecture integrating five computer vision tasks on the same video streams: facial recognition with zone-based access authorization and demographic profiling, automatic license plate recognition, weapon detection, fire and smoke detection, and human action recognition. The main contribution lies in the efficient integration of these heterogeneous components into a unified processing pipeline, complemented by the training of two custom models for scenarios that are insufficiently addressed by publicly available pretrained solutions.
 
-\chapter*{Rezumat}
+From an architectural perspective, the system is implemented as a monolithic application built around a concurrent processing pipeline consisting of seven execution threads: one thread for video capture, five threads dedicated to the analysis modules, and one thread responsible for result fusion. All models are loaded into memory only once and share GPU resources, while asynchronous execution combined with a "latest available frame" policy enables the system to maintain an end-to-end latency below 100 ms per frame. The backend is implemented using the FastAPI framework, providing a REST API and a WebSocket endpoint for real-time streaming of annotated frames, whereas the user interface is developed in React and incorporates JWT-based authentication together with role-based access control (RBAC).
 
-{
-    \color{gray}
-    Acesta este rezumatul lucrării, realizat după finalizarea tuturor celorlaltor componente ale documentului (în special capitolele). El prezintă, în linii mari, obiectivele și realizările lucrării. Este prezent atât în limba română, cât și în cea engleză.
-}
-
-\thispagestyle{front}
+The proposed system integrates well-established computer vision models, including InsightFace, EasyOCR, YOLO-based detectors, and the SlowFast architecture. In addition, two custom components were developed: a YOLOv8m-based weapon detector, fine-tuned on a combined dataset and achieving an mAP@0.5 score of 0.947, and a SlowFast-R50-based human action recognition module trained on a custom dataset specifically created for vandalism detection, achieving an accuracy of 94.33\%. The experimental results demonstrate the feasibility of the proposed integrated architecture capable of operating in real time on affordable hardware platforms.
