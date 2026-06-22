@@ -27,7 +27,7 @@ Selecția fiecărui model nu a urmărit exclusiv acuratețea brută pe seturi de
 	\item \textbf{Inferență în timp real în regim concurent} -- toate modelele rulează simultan, pe fire de execuție separate, utilizând \textit{aceeași} placă grafică (a se vedea Secțiunea~\ref{sec:fuziune}); un model lent ar deveni factorul limitativ pentru întregul flux de procesare;
 	\item \textbf{Robustețe în condiții reale de supraveghere} -- rezoluții reduse, iluminare neuniformă, unghiuri oblice și ocluzii parțiale;
 	\item \textbf{Disponibilitatea unor ponderi pre-antrenate mature} -- care reduc sau elimină costul de antrenare și oferă un punct de pornire solid pentru optimizarea suplimentară (\textit{fine-tuning}), acolo unde aceasta a fost necesară;
-	\item \textbf{Ușurința integrării} în arhitectura Python concurentă a aplicației (compatibilitate cu ecosistemele PyTorch / ONNX Runtime, API stabil, întreținere activă).
+	\item \textbf{Ușurința integrării} în arhitectura Python concurentă a aplicației (compatibilitate cu ecosistemele PyTorch / ONNX Runtime, API stabil, întreți-nere activă).
 \end{enumerate}
 
 Tabelul~\ref{tab:justificare_modele} sintetizează, pentru fiecare sarcină de inteligență artificială, alternativele luate în considerare, modelul ales și argumentele principale care au stat la baza deciziei. Detaliile de implementare sunt prezentate în secțiunile următoare ale prezentului capitol.
@@ -588,7 +588,7 @@ La nivelul fiecărui cadru, metoda \inlinecode{process\_frame()} execută funcț
 \subsection{Pipeline-ul de filtrare în cinci niveluri}
 \label{subsec:pipeline_filtrare}
 
-Fiecare rezultat candidat furnizat de modelul YOLOv10 parcurge, în mod secvențial, cinci niveluri de filtrare. Pentru ca o detecție să fie validată și transformată în alertă, aceasta trebuie să îndeplinească cerințele tuturor celor cinci etape; neîndeplinirea criteriilor la oricare dintre aceste niveluri atrage respingerea automată a detecției (sau, în cazul specific al filtrului temporal, reținerea acesteia în starea de detecție aflată în curs de confirmare). Sistemul menține o serie de statistici interne (precum \inlinecode{rejected\_by\_size}, \inlinecode{rejected\_by\_color} etc.) pentru a contoriza cu precizie numărul detecțiilor invalidate la nivelul fiecărui filtru.
+Fiecare rezultat candidat furnizat de modelul YOLOv10 parcurge, în mod secven-țial, cinci niveluri de filtrare. Pentru ca o detecție să fie validată și transformată în alertă, aceasta trebuie să îndeplinească cerințele tuturor celor cinci etape; neîndeplinirea criteriilor la oricare dintre aceste niveluri atrage respingerea automată a detecției (sau, în cazul specific al filtrului temporal, reținerea acesteia în starea de detecție aflată în curs de confirmare). Sistemul menține o serie de statistici interne (precum \inlinecode{rejected\_by\_size}, \inlinecode{rejected\_by\_color} etc.) pentru a contoriza cu precizie numărul detecțiilor invalidate la nivelul fiecărui filtru.
 
 Listing-ul~\ref{lst:fire_pipeline} sintetizează cascada celor cinci filtre aplicată fiecărui candidat YOLOv10 în \inlinecode{process\_frame()}. Etapele 3, 4 și 5 sunt detaliate în subsecțiunile următoare, împreună cu Listing-urile~\ref{lst:fire_history} și~\ref{lst:fire_confirm}.
 
