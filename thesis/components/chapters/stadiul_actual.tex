@@ -29,14 +29,14 @@ Piața sistemelor de supraveghere video este dominată în prezent de soluții c
 Verkada este o platformă modernă de securitate, nativă în cloud (SaaS - \emph{Software as a Service}), recunoscută pentru ușurința în instalare și managementul centralizat \cite{verkada_overview}.
 \begin{itemize}
 	\item \textbf{Capabilități AI declarate:} Sistemul integrează algoritmi de analiză video la nivel de procesor (\emph{edge computing}) capabili de detectarea persoanelor și a vehiculelor, recunoașterea atributelor faciale și a culorii hainelor, recunoașterea plăcuțelor de înmatriculare (LPR) și detectarea comportamentelor neobișnuite \cite{verkada_overview}.
-	\item \textbf{Model de licențiere:} Utilizarea platformei necesită plata unei licențe software anuale pentru fiecare cameră în parte (cuprinsă adesea între 200 și 1800 USD per an/dispozitiv).
+	\item \textbf{Model de licențiere:} Utilizarea platformei necesită plata unei licențe software recurente, distincte pentru fiecare cameră, fără de care funcționalitățile platformei (gestionare în cloud, analiză video, acces de la distanță) nu sunt disponibile.
 	\item \textbf{Limitări observate:} Cea mai mare constrângere este \emph{dependența totală de hardware-ul producătorului} (\emph{vendor lock-in}). Platforma software \linebreak Verkada funcționează exclusiv cu camerele produse de ei \cite{verkada_security}. În plus, costul total de proprietate (TCO - \emph{Total Cost of Ownership}) crește masiv pe termen lung din cauza licențelor recurente, iar dependența de cloud poate fi un dezavantaj pentru instituțiile care impun izolarea strictă a datelor.
 \end{itemize}
 
 \subsubsection*{2. Avigilon (Motorola Solutions)}
 Avigilon este unul dintre liderii tradiționali ai pieței de sisteme de management video (VMS), oferind soluții hibride și \emph{on-premise} destinate mediului \emph{enterprise} \cite{avigilon_appearance}.
 \begin{itemize}
-	\item \textbf{Capabilități AI declarate:} Tehnologia sa de vârf, \emph{Avigilon Appearance Search}, permite căutarea rapidă a persoanelor și vehiculelor în zeci de fluxuri video simultan \cite{avigilon_docs}. Oferă, de asemenea, LPR, detecția mișcărilor neobișnuite (\emph{Unusual Motion Detection}) și integrare profundă cu sistemele de control al accesului.
+	\item \textbf{Capabilități AI declarate:} Tehnologia sa de vârf, \emph{Avigilon Appearance Search}, permite căutarea rapidă a persoanelor și vehiculelor în zeci de fluxuri video simultan \cite{avigilon_appearance}. Oferă, de asemenea, LPR, detecția mișcărilor neobișnuite (\emph{Unusual Motion Detection}) și integrare profundă cu sistemele de control al accesului.
 	\item \textbf{Model de licențiere:} Licențierea este modulară, presupunând o achiziție inițială substanțială (per server și per canal/cameră), plus costuri suplimentare pentru modulele de analiză AI avansată și actualizări de mentenanță.
 	\item \textbf{Limitări observate:} Deși software-ul poate accepta camere de la terți (prin protocolul ONVIF), obținerea performanțelor AI maxime și utilizarea anumitor algoritmi necesită achiziționarea fie a camerelor Avigilon cu AI integrat, fie a unor echipamente de procesare dedicate (\emph{Avigilon AI Appliances}) \cite{avigilon_appearance}. Sistemul funcționează ca o „cutie neagră” și presupune bugete inaccesibile utilizatorilor de rând sau organizațiilor mici.
 \end{itemize}
