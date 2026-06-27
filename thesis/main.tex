@@ -7,4 +7,12 @@
 \subfile{components/frontmatter/all}
 \subfile{components/chapters/all}
 
+% Ultima filă: coală albă pentru legare/șnuruire (regula 2) — nenumerotată și
+% neinclusă în numerotare. Se decrementează contorul de pagină pentru ca eticheta
+% LastPage (folosită în footer la „X din Y") să rămână la totalul de pagini scrise.
+\clearpage
+\addtocounter{page}{-1}
+\thispagestyle{empty}
+\null
+
 \end{document}
