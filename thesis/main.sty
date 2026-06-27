@@ -5,6 +5,14 @@
 \usepackage[T1]{fontenc}
 \usepackage[romanian]{babel}
 
+% Font: Times New Roman pentru text si matematica (regula de tehnoredactare)
+\usepackage{mathptmx}
+
+% Margini de 2,5 cm pe toate laturile, format A4 Portrait (regula de tehnoredactare)
+\usepackage[a4paper,top=2.5cm,bottom=2.5cm,left=2.5cm,right=2.5cm,headheight=17pt,headsep=12pt,footskip=30pt]{geometry}
+
+% Spatierea randurilor: Single (uzual) - valoarea implicita LaTeX
+
 % Packages
 \usepackage[
     backend=bibtex,
@@ -69,20 +77,24 @@
 \captionsetup[table]{name=Tabel}
 
 % Header and footer styles and their appliances on different generated components
+% Regula de tehnoredactare: caracterul lucrarii (NECLASIFICAT) centrat, majuscule,
+% size 10, Times New Roman, in Header si Footer; sub Footer "<pagina> din <total>".
 \renewcommand{\headrulewidth}{1pt}
 \renewcommand{\footrulewidth}{1pt}
+\newcommand{\neclasif}{{\fontsize{10}{12}\selectfont NECLASIFICAT}}
 \fancypagestyle{front}{
   \fancyhf{}
-  \fancyhead[C]{\small NECLASIFICAT}
-  \fancyfoot[C]{\small NECLASIFICAT\\\thepage}
+  \fancyhead[C]{\neclasif}
+  \fancyfoot[C]{\neclasif\\{\fontsize{10}{12}\selectfont\thepage\ din \pageref*{LastPage}}}
 }
 \pagestyle{front}
 \fancypagestyle{plain}{
   \fancyhf{}
-  \fancyhead[C]{\small NECLASIFICAT}
-  \fancyfoot[C]{\small NECLASIFICAT\\\thepage\ din \pageref*{LastPage}}
+  \fancyhead[C]{\neclasif}
+  \fancyfoot[C]{\neclasif\\{\fontsize{10}{12}\selectfont\thepage\ din \pageref*{LastPage}}}
 }
-\newenvironment{frontmatter}{\pagenumbering{roman}}{\newpage \pagenumbering{arabic}}
+% Numerotare araba continua pentru intreaga lucrare (foaia de titlu nu se numeroteaza)
+\newenvironment{frontmatter}{\pagenumbering{arabic}}{\newpage}
 \AtBeginDocument{\addtocontents{toc}{\protect\thispagestyle{front}}}
 \addtocontents{lof}{\protect\thispagestyle{front}}
 

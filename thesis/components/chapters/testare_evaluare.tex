@@ -7,4 +7,483 @@
 \chapter{Testarea și Evaluarea Sistemului}
 \label{ch:testare}
 
+Capitolele anterioare au descris arhitectura sistemului și implementarea celor cinci module de
+inteligență artificială. Capitolul de față le supune unei testări sistematice, orientate spre
+comportamentul real al sistemului, pe seturi de date publice și înregistrări reale de supraveghere,
+independente de mediul de dezvoltare. Evaluarea nu urmărește doar acuratețea brută, ci, mai ales,
+proprietățile relevante pentru o aplicație de securitate: capacitatea de a respinge intrările
+necunoscute, rata de alarmă falsă și robustețea în condiții realiste. Acolo unde un modul integrează un flux de procesare propriu -- preprocesare, votare temporală sau confirmare pe mai multe cadre --
+testarea compară explicit sistemul complet cu modelul independen, pentru a evidenția contribuția  logicii suplimentare de validare. Din acest motiv, mai multe module sunt evaluate atât pe imagini statice, cât și pe fluxuri video continue, acesta din urmă fiind regimul real de funcționare.
+
+În continuare sunt prezentate, pe rând, evaluările celor cinci module. \textbf{Recu-noașterea facială} este testată pe setul \textbf{LFW} (\textit{Labeled Faces in the Wild}), utilizând un protocol de identificare ce include respingerea persoanelor neautorizate. \textbf{Recunoașterea plăcuțelor} de înmatriculare este evaluată atât prin detecție și citire pe imagini statice, cât și pe clipuri video prin validare temporală, comparând fluxul de procesare integrat cu extragerea de bază oferită de EasyOCR. \textbf{Detecția focului și a fumului} este analizată pe seturile de date \textbf{D-Fire} (imagini) și \textbf{FIRESENSE} (video), ambele incluzând exemple negative esențiale pentru măsurarea ratei de alarme false. În cazul \textbf{detecției armelor} sunt reluate rezultatele obținute în etapa de antrenare, expuse detaliat în capitolul de implementare. \textbf{Recunoașterea acțiunilor umane} este evaluată pe înregistrări autentice extrase din setul \textbf{UCF-Crime}. În final, sistemul este supus unei testări \textbf{integrate, end-to-end}, prin două scenarii complementare (unul funcțional și unul de stres) care validează atât corectitudinea operațiilor, cât și performanța sub o încărcare concurentă maximă.
+
+\section{Evaluarea modulului de recunoaștere facială}
+\label{sec:eval_facial}
+
+\subsection{Metodologia de testare}
+\label{subsec:metodologie_facial}
+
+Testarea a fost realizată pe setul de date public \textbf{LFW} (\textit{Labeled Faces in the Wild}), un reper consacrat pentru evaluarea recunoașterii faciale în condiții necontrolate. Imaginile sunt extrase din presă, incluzând variații naturale de iluminare, fundal, expresie facială, orientare a capului și accesorii. Setul cuprinde 13.233 de imagini asociate unui număr de 5.749 de persoane, distribuția fiind însă puternic dezechilibrată: 4.069 de indivizi apar cu o singură fotografie, în timp ce doar 96 de persoane dispun de cel puțin 15 imagini.
+
+Protocolul de evaluare reproduce \textit{exact} logica de decizie a sistemului real, astfel încât
+rezultatele să fie relevante pentru funcționarea efectivă a aplicației. Concret, scriptul de
+evaluare (\inlinecode{evaluate\_facial\_lfw.py}) reutilizează aceeași clasă de indexare
+(\inlinecode{FaissIndex}, de tip \inlinecode{IndexFlatL2}) și aceeași regulă de potrivire ca
+modulul de producție: fiecare imagine este transformată de InsightFace într-un vector de $512$ de
+dimensiuni, normalizat $L_2$. Acest vector este căutat în index, iar persoana este validată drept \textbf{cunoscută} doar dacă cel mai apropiat vecin îndeplinește o condiție decizională dublă: o distanță $L_2 < 1,0$ \textbf{și} un nivel de încredere (similaritate cosinus) $\geq 0,4$. În caz contrar, sistemul returnează statutul de \textbf{necunoscut} (\textit{Unknown}). Pragul de încredere nu influențează decizia pentru valori ale distanței sub 1,0, devenind activ exclusiv pentru setări mai permisive (peste $L_2 \approx 1,095$).
+
+Spre deosebire de protocolul clasic LFW (bazat pe verificarea perechilor de imagini pentru confirmarea identității), evaluarea curentă aplică o schemă de \textbf{identificare} 1:N cu respingere a intrușilor (\textit{open-set}). Această metodologie reflectă cu fidelitate funcționarea practică a sistemelor de control al accesului, unde utilizatorii legitimi trebuie recunoscuți corect, iar cei neautorizați trebuie respinși. Pentru fiecare subiect cunoscut, un subset de imagini este utilizat pentru \textbf{înregistrare} (\textit{enrollment}), iar un al doilea subset, disjunct, este destinat etapei de \textbf{testare}. Fotografiile indivizilor cu o singură apariție în setul LFW compun mulțimea \textit{impostorilor}. Aceștia nu sunt înregistrați în baza de date, iar răspunsul corect și așteptat la procesarea lor este întotdeauna statutul de necunoscut (\textit{Unknown}).
+
+Metricile raportate sunt următoarele:
+
+\begin{itemize} \item \textbf{Acuratețea de identificare}: reprezintă proporția imaginilor aparținând persoanelor cunoscute care au fost identificate corect, fiind atribuite identi-tății reale; \item \textbf{Rata de respingere a necunoscuților}: indică proporția impostorilor care au fost marcați corect cu statutul de \textit{Unknown}; \item \textbf{Rata de falsă acceptare} (FAR, \textit{False Acceptance Rate}): măsoară proporția impostorilor acceptați în mod eronat ca persoane înregistrate, aceasta reprezentând metrica de securitate critică a sistemului. \end{itemize}
+
+Imaginile în care detectorul nu identifică exact o singură fizionomie (situații cu nicio față sau cu mai multe fețe în cadru) sunt raportate distinct drept \textit{eșecuri de detecție}. Acestea sunt excluse din calculul preciziei, deoarece în astfel de cazuri modulul de recunoaștere nu este apelat. Pentru a asigura reproductibilitatea, selecția imaginilor are un caracter determinist, utilizând o valoare de inițializare fixă. Evaluarea a fost realizată în două regimuri complementare: un experiment \textit{controlat} de dimensiuni reduse, conceput pentru inspectarea detaliată a rezultatelor la nivel individual, și un experiment la \textit{scară mare}, menit să valideze robustețea concluziilor pe întreaga capacitate utilă a setului de date LFW.
+
+\subsection{Experimentul controlat}
+\label{subsec:facial_controlat}
+
+Primul experiment utilizează un eșantion restrâns, adecvat pentru o inspecție detaliată: 12 persoane cunoscute (selectate dintre cele cu cel mai mare număr de fotografii în setul LFW), fiecare având 5 imagini destinate înregistrării și 10 pentru testare, alături de 20 de fotografii ale unor subiecți necunoscuți. Această configurație simulează un scenariu tipic pentru un sistem de control al accesului, caracterizat printr-un număr redus de angajați înregistrați. Tabelul~\ref{tab:facial_controlat} sintetizează rezultatele individuale obținute la pragul decizional $L_2 = 1{,}0$.
+
+
+\begin{table}[h]
+    \centering
+    \caption{Identificarea persoanelor cunoscute în experimentul controlat (prag $L_2 = 1{,}0$).
+    Coloana \textit{Nedet.}indică numărul imaginilor fără o fizionomie unică detectabilă, acestea fiind excluse din calculul preciziei.Acuratețea reprezintă raportul dintre identificările \textit{Corecte} și numărul imaginilor efectiv evaluate.}
+    \label{tab:facial_controlat}
+    \begin{tabular}{l c c c c c c}
+        \hline
+        \textbf{Persoană} & \textbf{Teste} & \textbf{Nedet.} & \textbf{Corecte} &
+        \textbf{Greșite} & \textbf{Unknown} & \textbf{Acuratețe} \\
+        \hline
+        George W. Bush      & 10 & 0 & 10 & 0 & 0 & $100{,}0\%$ \\
+        Colin Powell        & 10 & 1 & 9  & 0 & 0 & $100{,}0\%$ \\
+        Tony Blair          & 10 & 0 & 9  & 0 & 1 & $90{,}0\%$  \\
+        Donald Rumsfeld     & 10 & 1 & 9  & 0 & 0 & $100{,}0\%$ \\
+        Gerhard Schröder    & 10 & 1 & 9  & 0 & 0 & $100{,}0\%$ \\
+        Ariel Sharon        & 10 & 2 & 8  & 0 & 0 & $100{,}0\%$ \\
+        Hugo Chávez         & 10 & 2 & 8  & 0 & 0 & $100{,}0\%$ \\
+        Junichiro Koizumi   & 10 & 1 & 9  & 0 & 0 & $100{,}0\%$ \\
+        Jean Chrétien       & 10 & 1 & 9  & 0 & 0 & $100{,}0\%$ \\
+        John Ashcroft       & 10 & 2 & 8  & 0 & 0 & $100{,}0\%$ \\
+        Jacques Chirac      & 10 & 2 & 8  & 0 & 0 & $100{,}0\%$ \\
+        Serena Williams     & 10 & 2 & 6  & 0 & 2 & $75{,}0\%$  \\
+        \hline
+        \textbf{TOTAL}      & \textbf{120} & \textbf{15} & \textbf{102} & \textbf{0} &
+        \textbf{3} & \textbf{97{,}1\%} \\
+        \hline
+    \end{tabular}
+\end{table}
+
+
+Dintre cele 105 imagini evaluate efectiv (din totalul de 120, în urma excluderii a 15 eșecuri de detecție), 102 au fost identificate corect, rezultând o acuratețe de 97,1\%. Un aspect esențial pentru domeniul securității este faptul că numărul identificărilor eronate (coloana \textit{Greșite}) este nul pentru toți subiecții, sistemul neconfundând în nicio situație o persoană cunoscută cu o alta. Cele trei erori înregistrate reprezintă exclusiv \textit{respingeri conservatoare} (imagini ale unor subiecți cunoscuți, etichetate drept \textit{Unknown}). Într-un sistem practic de control al accesului, acest comportament impune doar o reverificare a identității, evitând crearea unei vulnerabilități. În paralel, pentru cele 20 de fotografii ale indivizilor necunoscuți (18 rămase după eliminarea a două eșecuri de detecție), rata de respingere a fost de 100\%, nefiind înregistrată nicio acceptare falsă (FAR = 0\%).
+
+\subsection{Experimentul la scară extinsă}
+\label{subsec:facial_scara_mare}
+
+Pentru a verifica dacă aceste rezultate se mențin la o scară reprezentativă, al doilea experiment extinde galeria la \textbf{toate} cele 96 de persoane din setul LFW care dispun de minimum 15 fotografii (alocând câte 5 pentru înregistrare și maximum 20 pentru testare), în timp ce mulțimea impostorilor include \textbf{toți} cei 4.069 de indivizi cu o singură apariție. În total, au fost procesate 1.577 de imagini de test aferente subiecților cunoscuți și 4.069 de fotografii ale impostorilor. Tabelul~\ref{tab:facial_comparativ} prezintă o sinteză comparativă a celor două experimente, raportată la pragul decizional $L_2 = 1{,}0$.
+
+\begin{table}[h]
+    \centering
+    \caption{Analiză comparativă între experimentul controlat și cel la scară mare (prag decizional $L_2 = 1{,}0$). Acuratețea \textit{micro} este determinată la nivel de imagine, în timp ce varianta \textit{macro} reprezintă media acurateților individuale, neponderată în raport cu numărul de fotografii disponibile pentru fiecare persoană.}
+    \label{tab:facial_comparativ}
+    \begin{tabular}{l c c}
+        \hline
+        \textbf{Indicator} & \textbf{Controlat} & \textbf{Scară mare} \\
+        \hline
+        Persoane cunoscute            & $12$    & $96$    \\
+        Persoane necunoscute          & $20$    & $4.069$ \\
+        Imagini de test (cunoscuți)   & $120$   & $1.577$ \\
+        Acuratețe identificare (micro) & $97{,}1\%$ & $97{,}0\%$ \\
+        Acuratețe identificare (macro) & ---     & $96{,}9\%$ \\
+        Identificări greșite (confuzii) & $0$    & $0$     \\
+        Respingere necunoscuți        & $100\%$ & $100\%$ \\
+        Rată de falsă acceptare (FAR) & $0\%$   & $0\%$   \\
+        \hline
+    \end{tabular}
+\end{table}
+
+Rezultatele obținute demonstrează o stabilitate. Acuratețea de identificare înregistrează o scădere nesemnificativă, de la 97,1\% (pentru 12 persoane) la 97,0\% (pentru 96 de persoane), în timp ce valoarea \textit{macro} de 96,9\% confirmă faptul că performanța generală nu este distorsionată de un grup restrâns de subiecți cu un număr disproporționat de fotografii. Dintre cele 96 de persoane analizate, 73 au fost identificate cu o precizie de 100\%. Cele două atribute esențiale pentru securitate se mențin integral și la scară extinsă. Pentru cele 1.351 de imagini evaluate aparținând subiecților cunoscuți nu s-a produs \textit{nicio} confuzie de identitate, toate cele 40 de erori fiind exclusiv respingeri conservatoare etichetate drept \textit{Unknown}. În plus, pentru cei 3.463 de impostori evaluați efectiv (rezultați din totalul de 4.069 prin excluderea a 606 eșecuri de detecție), sistemul a atins o rată de respingere de 100\%, garantând o rată de acceptare falsă \textbf{nulă}. Respingerea completă a miilor de impostori la pragul decizional stabilit constituie o validare a siguranței semnificativ mai robustă comparativ cu experimentul restrâns.
+
+\subsection{Evaluarea pragului de recunoaștere}
+\label{subsec:facial_prag}
+
+Pragul aplicat distanței $L_2$ determină compromisul fundamental specific oricărui sistem de recunoaștere biometrică. Un prag strict diminuează riscul acceptărilor false, însă conduce la respingerea mai frecventă a utilizatorilor legitimi. În contrast, un prag permisiv facilitează identificarea, crescând simultan probabilitatea confuziilor de identitate. Pentru a fundamenta alegerea valorii decizionale $L_2 = 1,0$, au fost evaluate trei praguri reprezentative în cadrul ambelor experimente, rezultatele obținute fiind sintetizate în Tabelul~\ref{tab:facial_prag}.
+
+\begin{table}[h]
+    \centering
+    \caption{Impactul pragului decizional asociat distanței $L_2$ asupra acurateții de identificare și a ratei de respingere a subiecților necunoscuți.}
+    \label{tab:facial_prag}
+    \begin{tabularx}{\textwidth}{c *{3}{>{\centering\arraybackslash}X} l}
+        \hline
+        \textbf{Prag $L_2$} & \textbf{Acuratețe (controlat)} & \textbf{Acuratețe (scară mare)} &
+        \textbf{Respingere necun.} & \textbf{Observații} \\
+        \hline
+        $0{,}8$ & $87{,}6\%$ & $83{,}0\%$ & $100\%$ & strict \\
+        $1{,}0$ & $97{,}1\%$ & $97{,}0\%$ & $100\%$ & ales \\
+        $1{,}2$ & $98{,}1\%$ & $98{,}8\%$ & $100\%$ & permisiv \\
+        \hline
+    \end{tabularx}
+\end{table}
+
+Se observă că rata de respingere a subiecților necunoscuți se menține la 100\% pe întregul interval analizat. În cadrul acestui set de date, impostorii prezintă diferențe biometrice suficient de pronunțate față de persoanele înregistrate, prevenind apariția oricărei acceptări false chiar și la aplicarea unui prag permisiv. În contrast, acuratețea de identificare înregistrează o creștere semnificativă odată cu relaxarea deciziei. La valoarea strictă de 0,8 sunt respinse numeroase imagini valide (rezultând o acuratețe de doar 83,0\% în experimentul la scară extinsă), în timp ce la pragul de 1,0 performanța atinge un nivel de stabilizare de 97\%, dincolo de care îmbunătățirile devin marginale. Valoarea $L_2 = 1,0$ a fost selectată tocmai pentru a reflecta acest punct optim de echilibru, fiind suficient de flexibilă pentru a recunoaște fiabil utilizatorii legitimi, fără a compromite respingerea absolută a intrușilor. Figura~\ref{fig:facial_prag} ilustrează în mod grafic această dinamică pe parcursul unui spectru continuu de valori.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{facial_prag_l2.png}
+    \caption{Analiza compromisului asociat pragului de recunoaștere facială în cadrul experimentului la scară extinsă. Curba albastră (reprezentând acuratețea de identificare a subiecților cunoscuți) înregistrează o creștere rapidă în raport cu relaxarea deciziei, stabilizându-se în proximitatea valorii de 99\%, în timp ce curba roșie (indicând rata de respingere a persoanelor necunoscute) se menține constantă la 100\% pe parcursul întregului interval. Pragul selectat, $L_2 = 1,0$ (marcat prin linia punctată), este poziționat exact în punctul de stabilizare a acurateții, menținând totodată respingerea absolută a impostorilor.}
+    \label{fig:facial_prag}
+\end{figure}
+
+\subsection{Discuție asupra rezultatelor}
+\label{subsec:facial_discutie}
+
+Evaluarea pe setul LFW confirmă eficacitatea modulului de recunoaștere facială în contextul unui sistem de control al accesului. Se desprind trei concluzii principale. În primul rând, \textbf{absența completă a confuziilor de identitate} (zero identificări eronate, atât pentru eșantionul de 12, cât și pentru cel de 96 de persoane) subliniază faptul că validările de identitate sunt, practic, invariabil corecte. Erorile constau exclusiv în respingeri conservatoare, evitând astfel crearea unor vulnerabilități. În al doilea rând, \textbf{rata nulă de falsă acceptare} pe un volum de mii de impostori demonstrează robustețea mecanismului bazat pe prag dublu în filtrarea subiecților neautorizați, aceasta reprezentând o caracteristică fundamentală pentru domeniul securității. În al treilea rând, \textbf{stabilitatea rezultatelor} la o extindere de opt ori a galeriei (cu o variație minimă, de la 97,1\% la 97,0\%) indică o scalabilitate optimă, performanța sistemului nedegradându-se odată cu creșterea numărului de persoane înregistrate.
+
+Totuși, o limitare obiectivă trebuie asumată: aproximativ 14\% dintre imaginile LFW nu au permis identificarea unei fizionomii unice, motiv pentru care au fost excluse din calculul acurateții. Această proporție este influențată de specificul setului de date, alcătuit din fotografii statice de dimensiuni reduse (250 x 250 pixeli), care includ frecvent subiecți secundari în fundal. Aceste condiții determină detectorul fie să nu localizeze nicio față la scara de procesare aplicată, fie să identifice elemente multiple și să respingă imaginea, întrucât sistemul solicită o singură față pentru înregistrare. În regimul real de funcționare, bazat pe cadre video de rezoluție mai mare, unde subiectul se află în proximitatea camerei, asemenea situații sunt foarte rar întâlnite. Astfel, rata de eșec a detecției pe LFW reprezintă o estimare pesimistă, specifică acestui
+\emph{benchmark} și nu o limitare a sistemului în producție. Per ansamblu, faptul că modulul obține performanțe ridicate pe un set de date colectat în condiții necontrolate, necunoscut în etapa de dezvoltare, confirmă viabilitatea integrării realizate.
+
+\section{Evaluarea modulului de recunoaștere a plăcuțelor de înmatriculare}
+\label{sec:eval_placute}
+
+Modulul de recunoaștere a plăcuțelor de înmatriculare (ANPR), detaliat în \linebreak Secțiunea~\ref{sec:modul_placute}, integrează un detector YOLO pentru localizarea plăcuței cu motorul EasyOCR pentru extragerea caracterelor. Evaluarea vizează două aspecte principale: gradul de fiabilitate a detectorului în localizarea precisă a plăcuței și măsura în care fluxul de procesare aplicat anterior recunoașterii optice aduce un beneficiu real comparativ cu o citire de bază, directă, realizată exclusiv prin EasyOCR.
+
+\subsection{Metodologia de testare}
+\label{subsec:metodologie_placute}
+
+Evaluarea pe imagini statice a fost realizată utilizând setul de date public \textbf{license-plate-dataset}, preluat de pe platforma GitHub. Acesta reprezintă o colecție de fotografii cu autovehicule surprinse în trafic, în condiții variate de iluminare, perspectivă și distanță. Din acest corpus au fost selectate 114 imagini, fiecare conținând o singură plăcuță vizibilă. Acestea au fost adnotate manual cu numărul de înmatriculare corect. Această adnotare a textului constituie referința față de care se măsoară corectitudinea citirii optice.
+
+Pe acest set sunt comparate două abordări distincte de recunoaștere: \textbf{citirea de bază} (situație în care imaginea decupată este procesată direct de motorul EasyOCR) și \textbf{fluxul de procesare complet} al sistemului. Acesta din urmă aplică preliminar o serie de operații pentru îmbunătățirea calității vizuale (extinderea zonei de încadrare, redimensionarea plăcuțelor mici, conversia în tonuri de gri, atenuarea zgomotului, egalizarea contrastului prin metoda CLAHE și accentuarea muchiilor), urmate de o extragere adaptată formatului specific românesc. Corectitudinea este cuantificată prin \textbf{potrivirea exactă} a întregului șir și prin \textbf{rata de eroare la nivel de caracter} (CER), în timp ce precizia localizării realizate de detectorul YOLO este evaluată prin metrica \textbf{IoU} raportată la caseta adnotată.
+
+Testarea pe imagini statice reflectă însă exclusiv performanța pe un singur cadru. În regimul real de funcționare, sistemul nu realizează citirea dintr-o unică imagine, ci urmărește plăcuța pe parcursul mai multor cadre, agregând rezultatele prin \textbf{validare temporală} (prin intermediul mecanismului \inlinecode{PlateTracker}). Fiecare apariție a plăcuței generează o citire, iar rezultatul final reprezintă valoarea majoritară, ponderată cu nivelul de încredere și filtrată conform formatului plăcuțelor românești. Deoarece cadrele succesive surprind subiectul cu variații de claritate, unghi și iluminare, validarea temporală elimină confuziile accidentale la nivel de caracter. Pentru a cuantifica acest efect, a fost realizată o a doua evaluare, pe \textbf{flux video}, comparând cea mai bună citire extrasă de pe un \textit{singur cadru} cu rezultatul obținut prin \textit{validare temporală} pe întregul clip.
+
+În absența unui set public de date video adnotate cu plăcuțe românești care să corespundă acestui scenariu, a fost construit special un \textbf{set de date propriu}. Acesta a fost realizat prin decuparea manuală a unor secvențe scurte din înregistrări video publice (platforma YouTube) cu autovehicule circulând pe drumurile din România. Fiecare clip a fost ulterior etichetat manual cu numărul de înmatriculare corect, sistemul fiind responsabil exclusiv de detectarea automată a zonelor de interes. Acest proces laborios de selecție, editare și adnotare justifică dimensiunea redusă a setului, alcătuit din \textbf{33 de clipuri video}, volum considerat totuși reprezentativ pentru un scenariu tipic de control al accesului.
+
+\subsection{Evaluarea detecției}
+\label{subsec:placute_detectie}
+
+În cadrul celor 114 imagini de test, detectorul YOLO a localizat corect plăcuța (IoU $\geq 0,5$) în 88,6\% dintre cazuri, înregistrând un IoU mediu de 0,738, aspect care indică o precizie ridicată atunci când obiectul vizat este detectat. Performanța procesului de detecție este puternic influențată de dimensiunea plăcuței în cadru, conform datelor prezentate în Tabelul~\ref{tab:placute_detectie}. Pentru plăcuțele cu o dimensiune adecvată (având o lățime de minimum 180 de pixeli), detecția este cvasi-perfectă (cu o rată de succes cuprinsă între 99\% și 100\%), înregistrând însă o degradare abruptă a acurateței în cazul plăcuțelor de dimensiuni reduse, surprinse de la distanță în condiții de trafic.
+
+\begin{table}[h]
+    \centering
+    \caption{Rata de detecție a plăcuței de înmatriculare în funcție de lățimea acesteia în cadru, evaluată pe ansamblul setului de candidați.}
+    \label{tab:placute_detectie}
+    \begin{tabular}{l c c}
+        \hline
+        \textbf{Lățime plăcuță (px)} & \textbf{Imagini} & \textbf{Rată de detecție} \\
+        \hline
+        $40$--$80$    & $107$ & $1\%$   \\
+        $80$--$120$   & $150$ & $9\%$   \\
+        $120$--$150$  & $53$  & $55\%$  \\
+        $150$--$180$  & $30$  & $60\%$  \\
+        $180$--$250$  & $68$  & $99\%$  \\
+        $\geq 250$    & $19$  & $100\%$ \\
+        \hline
+    \end{tabular}
+\end{table}
+
+Acest comportament confirmă adecvarea detectorului pentru scenariul vizat, respectiv controlul accesului, context în care autovehiculul se află în proximitatea camerei, iar plăcuța ocupă o proporție suficientă în cadru. În schimb, identificarea plăcuțelor situate la o distanță considerabilă depășește capacitățile curente ale modelului. Pragul de selecție de 150 de pixeli, implementat în etapa de testare, reflectă cu exactitate acest regim de funcționare utilă.
+
+\subsection{Citirea prin fluxul de procesare versus citirea brută}
+\label{subsec:placute_ocr}
+
+Tabelul~\ref{tab:placute_ocr} prezintă o analiză comparativă între fluxul de procesare integrat și cele două variante de citire brută, evaluarea fiind realizată pe baza eșantionului de 114 imagini. Fluxul propus depășește abordarea de bază la nivelul tuturor celor trei metrici analizate: potrivirea exactă (36,0\% comparativ cu 30,7\%), rata de eroare la nivel de caracter (0,330 față de 0,343) și, într-un mod considerabil mai pronunțat, \textbf{proporția citirilor conforme cu formatul românesc valid} (52,6\% în raport cu 38,6\%). Prin restrângerea analizei la cele 101 imagini în care plăcuța a fost localizată corect, acest avantaj devine și mai evident. În această configurație, fluxul de procesare atinge o rată de potrivire exactă de 40,6\%, un indice CER de 0,244 și o validitate a formatului de 59,4\%, depășind performanțele de 34,7\%, 0,258 și respectiv 43,6\% înregistrate în cazul citirii brute.
+
+\begin{table}[h]
+    \centering
+    \caption{Compararea citirii plăcuțelor pe cele $114$ imagini de test.}
+    \label{tab:placute_ocr}
+    \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}X c c c}
+        \hline
+        \textbf{Variantă de citire} & \textbf{Potrivire exactă} & \textbf{CER mediu} &
+        \textbf{Format RO valid} \\
+        \hline
+        Pipeline (procesare completă)            & $36{,}0\%$ & $0{,}330$ & $52{,}6\%$ \\
+        EasyOCR brut, pe plăcuța detectată       & $30{,}7\%$ & $0{,}343$ & $38{,}6\%$ \\
+        EasyOCR brut, pe imaginea întreagă       & $15{,}8\%$ & $0{,}674$ & $21{,}1\%$ \\
+        \hline
+    \end{tabularx}
+\end{table}
+
+Citirea brută aplicată pe imaginea întreagă, fără localizare prealabilă prin YOLO, obține rezultate considerabil mai slabe (15,8\% potrivire exactă, CER de 0,674), confirmând rolul esențial al etapei de detecție. Fără decuparea regiunii de interes, EasyOCR este distras de texte irelevante din cadru (indicatoare, inscripții, alte vehicule). Figura~\ref{fig:placute_ocr} sintetizează grafic performanțele celor trei variante pe baza metricilor menționate.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{placute_comparatie_ocr.png}
+    \caption{Comparația celor trei variante de citire a plăcuțelor pe setul de test, evaluată prin potrivirea exactă, acuratețea la nivel de caracter (1 - CER) și proporția citirilor în format românesc valid. Pipeline-ul și citirea brută pe decupajul detectat sunt comparabile la primele două metrici, însă pipeline-ul generează semnificativ mai multe citiri în format valid. Citirea brută pe imaginea întreagă înregistrează performanțe inferioare la toate cele trei metrici.}
+    \label{fig:placute_ocr}
+\end{figure}
+
+\clearpage
+
+\subsection{Evaluarea pe video: efectul votării temporale}
+\label{subsec:placute_video}
+
+Pentru cele 33 de clipuri video, s-a comparat cea mai bună citire extrasă de pe un singur cadru cu rezultatul obținut prin votare temporală pe parcursul întregului clip. Sinteza acestor rezultate este prezentată în Tabelul~\ref{tab:placute_video}.
+
+\begin{table}[h]
+    \centering
+    \caption{Efectul votării temporale asupra recunoașterii plăcuțelor, pe $33$ de clipuri video.}
+    \label{tab:placute_video}
+    \begin{tabular}{l c c}
+        \hline
+        \textbf{Metodă} & \textbf{Potrivire exactă} & \textbf{CER mediu} \\
+        \hline
+        Un singur cadru (fără votare)          & $22/33$ \,($66{,}7\%$) & $0{,}173$ \\
+        Sistem complet (cu votare temporală)   & $27/33$ \,($81{,}8\%$) & $0{,}182$ \\
+        \hline
+    \end{tabular}
+\end{table}
+
+Votarea temporală îmbunătățește rata de potrivire exactă de la 66,7\% la 81,8\% (Figura~\ref{fig:placute_video}), recuperând cinci plăcuțe interpretate greșit la citirea pe un singur cadru. Erorile la nivel de un singur caracter (de exemplu, 620 interpretat ca 62 sau 99 ca 9I) sunt corectate prin votul majoritar al cadrelor în care caracterul respectiv a fost identificat corect. Eșecurile rămase corespund plăcuțelor citite eronat în cvasitotalitatea cadrelor (confuzii sistematice precum 5 cu S, influențate de font și de starea fizică a plăcuței), erori pe care nicio metodă de agregare nu le poate compensa. Acest rezultat confirmă eficiența procesării pe secvențe de cadre și reflectă regimul real de funcționare a sistemului, depășind estimarea pesimistă oferită de testul pe imagini statice.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{placute_video_votare.png}
+    \caption{Efectul votării temporale pe cele 33 de clipuri video: potrivirea exactă crește de la 66,7\% (cea mai bună citire pe un singur cadru) la 81,8\% (sistemul complet, cu votare pe mai multe cadre).}
+    \label{fig:placute_video}
+\end{figure}
+
+\subsection{Discuție asupra rezultatelor}
+\label{subsec:placute_discutie}
+
+Evaluarea conduce la trei concluzii principale. În primul rând, \textbf{localizarea prealabilă prin YOLO este indispensabilă}. Diferența majoră dintre citirea pe decupaj și cea aplicată pe imaginea integrală demonstrează că restrângerea recunoașterii optice la regiunea de interes reprezintă decizia arhitecturală fundamentală a modulului. În al doilea rând, fluxul complet de procesare depășește citirea de bază la nivelul tuturor metricilor, avantajul fiind cel mai pronunțat în ceea ce privește \textbf{proporția citirilor conforme cu formatul românesc valid}. Acest avantaj este decisiv în context operațional. În sistemul real, mecanismul de validare temporală acceptă o citire exclusiv dacă respectă formatul plăcuțelor românești, prin urmare o rată crescută de citiri valide se traduce direct într-un număr mai mare de identificări utilizabile.
+
+În al treilea rând, distincția dintre cele două regimuri de testare este esențială. Potrivirea exactă evaluată pe imagini statice (36\%) constituie o limită inferioară pesimistă, oferind o singură oportunitate de recunoaștere pe cadre de tip \textit{dashcam}, unde plăcuțele sunt frecvent de dimensiuni reduse și afectate de mișcare, unghiuri oblice sau iluminare variabilă. În regimul de funcționare curentă, sistemul analizează plăcuța pe o secvență de cadre și aplică decizia majoritară, aspect reflectat de evaluarea video, unde potrivirea exactă atinge 81,8\%. Această valoare, obținută în condiții similare scenariului vizat (control al accesului, cu autovehiculul aflat în proximitate și plăcuța vizibilă pe o durată prelungită), reprezintă estimarea relevantă a performanței globale. În contrast, rezultatul pe imagini statice evidențiază strict eficiența individuală a componentelor în situația limită a unui singur cadru.
+
+\section{Evaluarea modulului de detecție a focului și a fumului}
+\label{sec:eval_foc}
+
+Modulul de detecție a focului și a fumului (Secțiunea~\ref{sec:modul_foc_fum}) este fundamentat pe un detector YOLO, peste care se aplică un flux de reducere a alarmelor false structurat pe mai multe niveluri. Acesta include praguri de încredere diferențiate pe clasă (detecția fumului impunând un criteriu mai strict comparativ cu cea a focului), un filtru de dimensiune, o validare a plauzibilității cromatice în spațiul HSV și, ca mecanism central, confirmarea temporală. Aceasta din urmă condiționează declanșarea alarmei de persistența detecției pe parcursul mai multor cadre consecutive. Prin natura sa, acest strat decizional este proiectat pentru procesarea fluxurilor video, nu pentru imagini statice izolate. Evaluarea utilizează două seturi de date publice ce includ și exemple negative (scene fără foc sau fum), elemente indispensabile pentru cuantificarea ratei de alarmă falsă.
+
+\subsection{Metodologia de testare}
+\label{subsec:metodologie_foc}
+
+Deoarece obiectivul principal al modulului este de a ridica o alarmă, evaluarea este realizată la un nivel decizional binar: o imagine sau un clip este considerat pozitiv prezis dacă sistemul raportează cel puțin o detecție de foc sau fum. Sunt analizate comparativ două abordări: \textbf{detecția de bază} (reprezentând exclusiv ieșirea modelului YOLO, în absența filtrelor suplimentare) și \textbf{fluxul de procesare} complet. Metricile de performanță raportate includ rata de detecție a cazurilor pozitive (sensibilitatea), rata de alarmă falsă aferentă instanțelor negative, precizia, scorul F1 și acuratețea globală.
+
+Testarea a fost desfășurată în două regimuri distincte, adaptate specificului celor două seturi de date. În etapa bazată pe \textbf{imagini} (utilizând setul D-Fire, alcătuit din 4306 imagini de test, dintre care 2005 negative) sunt evaluate exclusiv filtrele aplicabile pe un cadru individual (pragurile de încredere, criteriul de dimensiune și validarea cromatică). Confirmarea temporală este omisă în această fază, nefiind aplicabilă imaginilor statice izolate. În regimul \textbf{video} (pe setul FIRESENSE, format din 49 de clipuri, dintre care 24 pozitive și 25 negative) este evaluat fluxul de procesare integrat. Acesta include validarea temporală, reproducând cu exactitate regimul operațional pentru care a fost conceput sistemul.
+
+\subsection{Evaluarea pe imagini}
+\label{subsec:foc_imagini}
+
+Tabelul~\ref{tab:foc_imagini} prezintă rezultatele evaluării pe setul D-Fire. Filtrele aplicate la nivel de cadru reduc rata de alarmă falsă la mai puțin de jumătate (de la 19,4\% la 8,9\%) și ameliorează ușor precizia, însă acest avantaj se obține cu prețul unei diminuări semnificative a sensibilității (de la 89,7\% la 53,6\%). Analiza instanțelor pozitive respinse indică faptul că filtrul de \textbf{culoare} este responsabil pentru mai mult de jumătate dintre acestea (54\%), fiind urmat de pragul decizional de încredere (24\%) și de criteriul de dimensiune (22\%).
+
+\begin{table}[h]
+    \centering
+    \caption{Detecția de foc și fum pe imagini (D-Fire), la nivel de alarmă.}
+    \label{tab:foc_imagini}
+    \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}X c c c c c}
+        \hline
+        \textbf{Variantă} & \textbf{Detecție} & \textbf{Alarmă falsă} & \textbf{Precizie} &
+        \textbf{F1} & \textbf{Acuratețe} \\
+        \hline
+        Brut (doar YOLO)             & $89{,}7\%$ & $19{,}4\%$ & $84{,}2\%$ & $0{,}87$ & $85{,}5\%$ \\
+        Pipeline (filtre per-cadru)  & $53{,}6\%$ & $8{,}9\%$  & $87{,}4\%$ & $0{,}66$ & $71{,}1\%$ \\
+        \hline
+    \end{tabularx}
+\end{table}
+
+Acest rezultat trebuie interpretat corect. În contextul unei imagini izolate, filtrele pot părea excesiv de conservatoare, deoarece acestea nu sunt concepute pentru a fundamenta decizia în mod independent. Rolul lor este calibrat strict pentru prefiltrarea candidaților, decizia finală fiind delegată mecanismului de validare temporală aplicat pe flux video. Pe un singur cadru, în absența acestui ultim nivel de validare, filtrele compromit o parte din sensibilitatea sistemului. Evaluarea regimului real de funcționare a acestui mecanism integrat este detaliată în subsecțiunea imediat următoare.
+
+\subsection{Evaluarea pe video: efectul confirmării temporale}
+\label{subsec:foc_video}
+
+În cadrul setului FIRESENSE, fluxul de procesare integrat (incluzând validarea pe o secvență de cadre consecutive) este comparat cu abordarea de detecție de bază, care declanșează alarma la orice identificare izolată pe un cadru. Rezultatele (Tabelul~\ref{tab:foc_video}, Figura~\ref{fig:foc_video}) confirmă valoarea reală a sistemului. Rata de detecție pe clipurile pozitive se menține la un nivel cvasi-perfect (23 din 24 de instanțe, echivalentul a 96\%, comparativ cu 100\% în cazul variantei brute), în timp ce \textbf{rata de alarmă falsă aferentă clipurilor negative scade de la 52\% la doar 4\%}. Printr-o analiză detaliată pe clase, această reducere devine și mai evidentă: pentru scenariile implicând foc, alarmele false înregistrează o scădere de la 69\% la 6\%, iar pentru cele cu fum diminuarea este totală, de la 22\% la 0\%.
+
+\begin{table}[h]
+    \centering
+    \caption{Detecția de foc și fum pe video (FIRESENSE): efectul confirmării temporale.}
+    \label{tab:foc_video}
+    \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}X >{\centering\arraybackslash}X >{\centering\arraybackslash}X}
+        \hline
+        \textbf{Variantă} & \textbf{Detecție (clipuri pozitive)} & \textbf{Alarmă falsă (clipuri negative)} \\
+        \hline
+        Brut (orice cadru)               & $24/24$ \,($100\%$) & $13/25$ \,($52\%$) \\
+        Pipeline (cu confirmare temporală) & $23/24$ \,($96\%$)  & $1/25$ \,($4\%$)   \\
+        \hline
+    \end{tabularx}
+\end{table}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{foc_video_comparatie.png}
+    \caption{Detecția de foc și fum pe video (FIRESENSE). Confirmarea temporală păstrează detecția pe
+    clipurile pozitive ($96\%$), reducând în același timp drastic rata de alarmă falsă pe clipurile
+    negative, de la $52\%$ la $4\%$. Pe un sistem de alarmare, această reducere este esențială pentru
+    utilizabilitate.}
+    \label{fig:foc_video}
+\end{figure}
+
+\subsection{Discuție asupra rezultatelor}
+\label{subsec:foc_discutie}
+
+Cele două regimuri de testare evidențiază clar faptul că fluxul de filtrare este proiectat pentru \textbf{flux video}, nu pentru imagini statice izolate. Pe un singur cadru, filtrele, în mod special verificarea cromatică, par să degradeze performanța, deoarece operează în absența mecanismului decizional pentru care au fost concepute. În regim video însă, unde prezența reală a focului și a fumului persistă pe parcursul a zeci de cadre, confirmarea temporală recuperează detecțiile valide (asigurând o sensibilitate de 96\%), în timp ce detecțiile false, tranzitorii și necorelate, nu reușesc să se mențină pe numărul de cadre necesar și sunt astfel eliminate.
+
+Această proprietate este decisivă pentru un sistem de securitate. O detecție de bază care ar declanșa alarma la peste jumătate dintre scenele inofensive (52\%) ar fi practic inutilizabilă, generând un volum de alarme false ce conduce rapid la ignorarea sistemului. Reducerea ratei de alarmă falsă la doar 4\%, însoțită de o pierdere neglijabilă a sensibilității, transformă detectorul brut într-un modul operațional fiabil. Rezultatele confirmă astfel că eficiența sistemului nu derivă exclusiv din rețeaua neuronală de detecție, ci în egală măsură din fluxul de procesare integrat care o încadrează.
+
+\section{Evaluarea modulului de detecție a armelor}
+\label{sec:eval_arme}
+
+Spre deosebire de celelalte componente, detectorul de arme a fost evaluat încă din etapa de antrenare pe o partiție de test dedicată, menținută complet separat de datele utilizate pentru antrenare și pentru selecția epocii optime. Această evaluare este analizată pe larg în Capitolul~\ref{ch:implementare_ai} (Secțiunea~\ref{subsec:rezultate_arme}), fiind reluată succint în această secțiune pentru a asigura completitudinea capitolului dedicat testării.
+
+Pe partiția de test (2191 de imagini nevăzute, dintre care 444 fără prezența vreunei arme), modelul a obținut o precizie de 94,3\%, o sensibilitate de 90,2\% și un indice mAP@0,5 de 0,943 (respectiv 0,696 pentru mAP@0,5:0,95). Aceste valori sunt practic identice cu cele măsurate pe partiția de validare (înregistrând diferențe sub un punct procentual în ambele direcții, conform Tabelului~\ref{tab:rezultate_arme}), aspect care confirmă o capacitate optimă de generalizare și absența fenomenului de supraînvățare. Comportamentul ușor conservator al modelului, evidențiat prin faptul că precizia este mai mare comparativ cu sensibilitatea, un aspect benefic pentru limitarea alarmelor false, alături de mecanismul de confirmare aplicat la inferență, sunt detaliate în Secțiunea~\ref{subsec:discutie_arme}.
+
+\section{Evaluarea modulului de recunoaștere a acțiunilor umane}
+\label{sec:eval_actiuni}
+
+Modulul de recunoaștere a acțiunilor umane, fundamentat pe rețeaua SlowFast~R50 descrisă în Secțiunea~\ref{sec:modul_actiuni}, clasifică secvențele video în trei categorii distincte: activitate normală (\inlinecode{normal}), altercații fizice (\inlinecode{fight}) și acte de vandalism (\inlinecode{vandalism}). În completarea metricilor obținute pe partiția de validare în etapa de antrenare (Secțiunea~\ref{subsec:rezultate_actiuni}), prezenta evaluare testează modelul pe un eșantion adițional de înregistrări de supraveghere, independent de cel utilizat pe parcursul dezvoltării.
+
+\subsection{Metodologia de testare}
+\label{subsec:metodologie_actiuni}
+
+Testarea a fost realizată pe un subset al setului public \textbf{UCF-Crime}, un corpus de înregistrări reale de supraveghere din care au fost selectate cele trei categorii relevante pentru sistem (normal, altercații și vandalism). Eșantionul cuprinde câte 50 de clipuri pentru fiecare categorie, însumând un total de 150 de clipuri.
+
+Evaluarea utilizează aceeași tehnică de segmentare aplicată în faza de antrenare. Clipul este analizat prin intermediul unei ferestre glisante de două secunde, fiecare segment fiind clasificat individual. Decizia la nivelul întregului clip nu rezultă din medierea rezultatelor per fereastră, ci printr-o agregare de tip „cel puțin una”. Mai exact, este suficient ca modelul să identifice o singură dată un act de agresiune sau de vandalism, cu o încredere peste pragul stabilit, pentru ca întregul clip să primească această etichetă. În caz contrar, starea atribuită rămâne \inlinecode{normal}. Această logică decizională reproduce cu fidelitate funcționarea în regim real, unde cadrele sunt recepționate continuu, iar o detecție certă declanșează instantaneu alarma, fără a necesita o mediere pe parcursul întregului flux.
+
+\subsection{Rezultate}
+\label{subsec:actiuni_rezultate}
+
+Pe cele 150 de clipuri, modelul atinge o acuratețe globală de 86,7\% și un scor F1 macro de 0,87. Tabelul~\ref{tab:actiuni} prezintă performanța aferentă fiecărei clase, iar Figura~\ref{fig:actiuni} ilustrează matricea de confuzie. Toate cele 50 de clipuri cu activitate normală sunt clasificate corect, fără a genera alarme false, acesta fiind un aspect esențial ce confirmă totodată că schema de agregare nu este excesiv de sensibilă. Acțiunile periculoase sunt detectate în mod fiabil, astfel încât 82\% dintre clipurile cu altercații și 78\% dintre cele cu acte de vandalism declanșează corect alarma corespunzătoare.
+
+\begin{table}[h]
+    \centering
+    \caption{Performanța modelului de recunoaștere a acțiunilor pe setul UCF-Crime, pe clase.}
+    \label{tab:actiuni}
+    \begin{tabular}{l c c c}
+        \hline
+        \textbf{Clasă} & \textbf{Sensibilitate} & \textbf{Precizie} & \textbf{Scor F1} \\
+        \hline
+        Normal     & $100\%$ & $78\%$ & $0{,}88$ \\
+        Lupte      & $82\%$  & $89\%$ & $0{,}85$ \\
+        Vandalism  & $78\%$  & $98\%$ & $0{,}87$ \\
+        \hline
+        \textbf{Global} & \multicolumn{3}{c}{Acuratețe $86{,}7\%$ \quad\textbar\quad F1 macro $0{,}87$} \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.65\textwidth]{actiuni_confuzie.png}
+    \caption{Matricea de confuzie a modelului de recunoaștere a acțiunilor pe cele $150$ de clipuri
+    UCF-Crime ($50$ per clasă).}
+    \label{fig:actiuni}
+\end{figure}
+
+\subsection{Discuție asupra rezultatelor}
+\label{subsec:actiuni_discutie}
+
+Rezultatele confirmă faptul că modulul este adecvat scopului său de alarmare. Cea mai importantă proprietate pentru un sistem de securitate, respectiv absența alarmelor false în cazul activităților normale, este îndeplinită integral (100\% dintre clipurile normale fiind clasificate corect). În același timp, ambele clase periculoase sunt detectate cu o sensibilitate ridicată (82\% și 78\%), iar precizia ridicată (peste 89\%) demonstrează că, atunci când sistemul semnalează o altercație sau un act de vandalism, alerta este aproape întotdeauna corectă.
+
+Erorile rămase se împart în două categorii. O parte dintre clipurile periculoase nu declanșează alarma (fiind etichetate drept \inlinecode{normal}), situație întâlnită de regulă atunci când acțiunea este filmată de la distanță sau are o durată foarte scurtă. A doua categorie, cu o pondere mai redusă, constă în confuziile dintre altercații și vandalism. Acestea sunt pe deplin explicabile, deoarece ambele acțiuni implică mișcări bruște și agresive, iar granița vizuală dintre ele poate fi ambiguă chiar și pentru un observator uman. Per ansamblu, comportamentul modelului pe acest set independent de date este consecvent cu cel observat în etapa de antrenare, performanță care îl recomandă ferm pentru integrarea într-un sistem de monitorizare în timp real.
+
+\section{Testarea sistemului integrat}
+\label{sec:eval_sistem}
+
+Secțiunile anterioare au evaluat performanța individuală a fiecărui model. Această secțiune testează \textbf{sistemul integrat end-to-end}, reproducând exact fluxul de producție. Clipurile video sunt injectate utilizând o sursă de tip „cameră de supraveghere” (prin endpoint-ul \inlinecode{POST /api/streams} cu parametrul \inlinecode{source="file"}) și sunt redate în \textbf{timp real} la frecvența nativă a cadrelor. Similar funcționării unei camere reale, cadrele care depășesc capacitatea de procesare a fluxului sunt omise. Datele vizuale sunt analizate \textit{simultan} de toate cele șase modele, rezultatele fiind ulterior stocate în baza de date PostgreSQL și transmise prin WebSocket. Un utilitar extern de testare a înregistrat în mod automat metricile provenite din interfața de stare, din fluxul WebSocket și din baza de date. Toate măsurătorile au fost efectuate utilizând o placă grafică \textbf{NVIDIA RTX~4060 (8~GB)}.
+
+Evaluarea s-a desfășurat pe baza a două scenarii complementare: un \textbf{test secvențial}, menit să valideze corectitudinea funcțională, și un \textbf{test de stres}, conceput pentru a măsura comportamentul sistemului sub o încărcare concurentă maximă.
+
+\subsection{Testarea funcțională (scenariul secvențial)}
+\label{subsec:sistem_secvential}
+
+În primul scenariu, obiectele de interes apar \textbf{succesiv} într-un singur clip (o persoană cunoscută, o persoană necunoscută, o plăcuță de înmatriculare, foc, un act de vandalism, o altercație și o armă), iar corectitudinea este evaluată automat pe baza unui fișier de adnotări care definește intervalul temporal și valoarea așteptată pentru fiecare entitate. Rezultatele obținute sunt sintetizate în Tabelul~\ref{tab:sistem_secvential}, care confirmă faptul că \textbf{toate cele șase categorii au fost detectate și clasificate corect}, înregistrând o rată de detecție de 100\%.
+
+\begin{table}[h]
+    \centering
+    \caption{Testarea funcțională a sistemului integrat (scenariul secvențial). Latența de detecție reprezintă intervalul scurs de la apariția obiectului de interes în clip până la prima sa identificare corectă, fiind raportată la momentul procesării primului cadru efectiv (originea temporală este aliniată cu momentul intrării fluxului video în etapa de procesare).}
+    \label{tab:sistem_secvential}
+    {\footnotesize
+    \begin{tabular}{l l c r r}
+        \hline
+        \textbf{Detector} & \textbf{Țintă / rezultat așteptat} & \textbf{Corect} &
+        \textbf{Latență} & \textbf{Încredere} \\
+        \hline
+        Recunoaștere facială & persoană cunoscută (identitate) & da & $0{,}03$ s & $0{,}79$ \\
+        Recunoaștere facială & persoană necunoscută (\textit{Unknown}) & da & $0{,}32$ s & --- \\
+        Plăcuțe înmatriculare & text \inlinecode{B112DGF} (CER $=0$) & da & $0{,}06$ s & $0{,}80$ \\
+        Acțiuni (SlowFast) & vandalism & da & $0{,}0$ s & $0{,}88$ \\
+        Acțiuni (SlowFast) & bătaie (\textit{fight}) & da & $2{,}87$ s & $0{,}92$ \\
+        Detecție foc/fum & foc & da & $1{,}90$ s & $0{,}81$ \\
+        Detecție armă & armă & da & $3{,}18$ s & $0{,}89$ \\
+        \hline
+    \end{tabular}}
+\end{table}
+
+Recunoașterea facială distinge corect persoana \textbf{înrolată} (indicând o identitate corectă cu un nivel de încredere de aproximativ 0,79) de cea neînrolată (etichetată \textit{Unknown} în 100\% dintre cadre, fără a genera potriviri false). În același timp, recunoașterea plăcuței de înmatriculare produce o potrivire exactă a textului (CER = 0). Detectoarele axate pe obiecte specifice (față, plăcuță) raportează o latență practic nulă, ținta fiind recunoscută chiar din primul cadru procesat după apariția sa.
+
+Latențele superioare înregistrate pentru detecția focului (1,9 secunde) și a armelor (3,2 secunde) reflectă intervenția mecanismului de confirmare temporală pe mai multe cadre consecutive. Acesta reprezintă un compromis intenționat și necesar între promptitudinea sistemului și reducerea drastică a alarmelor false. Latența în cazul altercațiilor (aproximativ 2,9 secunde) este determinată de frecvența de execuție a modulului SlowFast. Acesta rulează inferența la fiecare 30 de cadre (durată echivalentă cu aproximativ 2,7 secunde la rata efectivă de 10 fps a fluxului de procesare), analizând o fereastră video de două secunde, nu fiecare cadru individual.
+
+\subsection{Testarea sub încărcare (scenariul de stres)}
+\label{subsec:sistem_stres}
+
+În cel de-al doilea scenariu, un singur clip cu \textbf{ecran divizat în șase cadrane}, fiecare redând un videoclip diferit, forțează toate modelele să execute identificări \textbf{simultan}, simulând astfel o încărcare concurentă maximă. Tabelul~\ref{tab:sistem_throughput} expune debitul de procesare obținut, Tabelul~\ref{tab:sistem_latenta} detaliază latențele de inferență specifice fiecărui model în condiții de stres, în timp ce Figura~\ref{fig:sistem_stres} ilustrează evoluția consumului de resurse pe parcursul testării.
+
+\begin{table}[h]
+    \centering
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \caption{Debitul de procesare sub încărcare.}
+        \label{tab:sistem_throughput}
+        \begin{tabular}{l r}
+            \hline
+            \textbf{Metrică} & \textbf{Valoare} \\
+            \hline
+            FPS sursă (nativ)            & $30{,}1$ \\
+            FPS efectiv de procesare     & $\approx 10$ \\
+            Cadre sosite                 & $2107$ \\
+            Cadre procesate              & $747$ \\
+            Cadre sărite (timp real)     & $63{,}2\%$ \\
+            Cadre pierdute la cozi pline & $3{,}6\%$ \\
+            \hline
+        \end{tabular}
+    \end{minipage}\hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \caption{Latența de inferență per model.}
+        \label{tab:sistem_latenta}
+        \begin{tabular}{l r}
+            \hline
+            \textbf{Detector} & \textbf{Latență (ms)} \\
+            \hline
+            Recunoaștere facială         & $63$ \\
+            Detecție plăcuțe             & $42$ \\
+            Detecție foc/fum             & $42$ \\
+            Detecție armă                & $39$ \\
+            Acțiuni (SlowFast, \textit{forward}) & $8$ \\
+            \hline
+        \end{tabular}
+    \end{minipage}
+\end{table}
+
+Sistemul procesează aproximativ 10 cadre pe secundă provenite concomitent din toate cele șase secvențe video. Aproximativ 63\% din fluxul nativ de 30 fps este omis \textit{deliberat} pentru a garanta prelucrarea în timp real, un comportament identic cu cel al unei camere fizice aflate în regim de suprasolicitare. În paralel, pierderile înregistrate la nivelul cozilor interne se mențin la un nivel redus de 3,6\%, aspect care confirmă dimensionarea adecvată a acestora. Din punct de vedere computațional, componenta cea mai costisitoare o reprezintă \textbf{recunoașterea facială} (cu o latență de 63 ms per cadru, cost care se ajustează proporțional cu numărul de fețe prezente și cu interogările efectuate în indexul FAISS), fiind urmată de detectoarele YOLO. Prin contrast, rețeaua SlowFast înregistrează cea mai mică latență aferentă propagării directe (8 ms), inferența acesteia fiind executată exclusiv periodic la un interval de câteva secunde.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{sistem_stres.png}
+    \caption{Utilizarea resurselor pe parcursul testului de stres (șase fluxuri simultane, RTX~4060). GPU-ul
+    atinge un vârf de $69\%$ (medie $\approx 38\%$), iar memoria video rămâne constantă la $2{,}5$~GB din cei
+    $8$~GB disponibili, indicând o rezervă consistentă de resurse.}
+    \label{fig:sistem_stres}
+\end{figure}
+
+Pe parcursul testului, gradul de utilizare a unității de procesare grafică s-a menținut sub 70\% (înregistrând o medie de aproximativ 38\%), consumul de memorie video a fost de 2,5 din capacitatea totală de 8 GB, iar temperatura a rămas sub 62 °C, în contextul unei solicitări a procesorului central de doar 8\%. Mecanismul de monitorizare a confirmat prezența a până la patru tipuri de modele active în mod simultan (cu o medie de aproximativ 2,75), validând astfel faptul că scenariul a încărcat efectiv fluxul de procesare prin execuția detecțiilor în paralel.
+
+\subsection{Discuție și concluzii}
+\label{subsec:sistem_discutie}
+
+Cele două scenarii de testare evidențiază atât funcționalitatea completă a sistemului, cât și capacitatea acestuia de a opera stabil în condiții de încărcare ridicată. Din punct de vedere funcțional, toate cele șase module detectează și clasifică corect țintele, înregistrând o rată de detecție de 100\% în scenariul secvențial. Această performanță include recunoașterea precisă a identității, diferențierea corectă între persoanele cunoscute și cele necunoscute, precum și citirea exactă a textului de pe plăcuțele de înmatriculare. De asemenea, în condiții de încărcare concurentă maximă, sistemul își păstrează stabilitatea și funcționează în timp real, procesând aproximativ 10 cadre pe secundă, cu pierderi minime la nivelul cozilor interne și fără a satura unitatea de procesare grafică. Rezerva semnificativă de resurse disponibile (aproximativ 62\% capacitate GPU și 5,5 GB memorie VRAM liberă) indică existența unei marje consistente pentru optimizări ulterioare sau pentru procesarea simultană a unui număr mai mare de fluxuri video.
+
+
+\section{Concluziile testării}
+\label{sec:concluzii_testare}
+
+Testarea prezentată în acest capitol confirmă faptul că sistemul dezvoltat este complet funcțional și viabil din punct de vedere operațional. Fiecare dintre cele cinci module a fost validat utilizând seturi de date externe, independente de mediul de dezvoltare, iar evaluarea sistemului integrat a demonstrat funcționarea corectă în timp real, inclusiv în condiții de încărcare concurentă maximă.
+
+Rezultatele obținute la nivelul modulelor individuale evidențiază performanțe solide. Modulul de recunoaștere facială atinge o acuratețe de identificare de aproximativ 97\% și, aspect deosebit de important din perspectiva securității, nu înregistrează nicio acceptare falsă în cadrul testelor efectuate pe câteva mii de identități neautorizate, menținându-și totodată performanțele odată cu extinderea galeriei de persoane. În cazul recunoașterii plăcuțelor de înmatriculare, rezultatele confirmă eficiența lanțului de procesare propus, mecanismul de votare temporală crescând acuratețea citirii pe secvențe video de la 66,7\% la 81,8\%. Pentru detecția incendiilor și a fumului, beneficiile procesării temporale sunt și mai evidente: confirmarea pe mai multe cadre reduce rata alarmelor false de la 52\% la numai 4\%, fără a afecta semnificativ capacitatea de detecție, care se menține la 96\%. Modulul de recunoaștere a acțiunilor obține o acuratețe de 86,7\% pe un set independent de înregistrări de supraveghere, fără a genera alarme false în cazul activităților normale, iar detectorul de arme atinge o precizie de 94,3\% pe setul de test utilizat.
+
+Un aspect comun evidențiat de toate aceste rezultate îl reprezintă contribuția esențială a etapelor de procesare care completează modelele de inteligență artificială, precum votarea temporală și confirmarea detecțiilor pe cadre succesive. Deși aceste mecanisme pot părea excesiv de conservatoare atunci când sunt evaluate pe imagini individuale, în condiții reale de funcționare ele își demonstrează eficiența prin reducerea semnificativă a alarmelor false, fără a compromite sensibilitatea sistemului. În consecință, performanțele măsurate pe imagini statice pot fi considerate o estimare conservatoare a comportamentului sistemului, în timp ce rezultatele obținute pe fluxuri video reflectă mai fidel performanțele în exploatarea practică. Evaluarea sistemului integrat susține această concluzie, demonstrând funcționarea în timp real cu o rezervă suficientă de resurse hardware.
+
+Totodată, procesul de testare a evidențiat și limitările sistemului. Modulul de recunoaștere a acțiunilor poate confunda clase de acțiuni similare, precum bătaia și actele de vandalism, caracterizate prin tipare de mișcare apropiate. În mod similar, performanțele modulelor de detecție a plăcuțelor de înmatriculare și a incendiilor scad în cazul obiectelor de dimensiuni reduse sau aflate la distanțe mari, în afara domeniului de funcționare pentru care sistemul a fost proiectat. Cu toate acestea, aceste limitări nu afectează concluzia generală a evaluării. În scenariul vizat de proiect, respectiv monitorizarea video în timp real a unor ținte aflate la distanțe rezonabile, sistemul își îndeplinește în mod fiabil rolul de detecție, identificare și generare a alertelor.
+
 \end{document}
