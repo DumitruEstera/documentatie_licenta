@@ -7,4 +7,35 @@
 \chapter{Concluzii și Direcții de Dezvoltare}
 \label{ch:concluzii}
 
+\section{Sinteza rezultatelor și a contribuțiilor}
+\label{sec:sinteza_rezultate}
+
+Lucrarea de față a urmărit proiectarea și implementarea unei soluții software unitare de analiză inteligentă a fluxurilor video, capabilă să orchestreze simultan, pe aceleași fluxuri, șase sarcini distincte de viziune artificială: recunoașterea facială, analiza demografică și a emoțiilor, recunoașterea plăcuțelor de înmatriculare, detecția incendiilor și a fumului, detecția armelor și recunoașterea acțiunilor umane. Aceste module au fost integrate într-o arhitectură multi-threaded, organizată în jurul unor cozi de mesaje thread-safe, aspect care permite procesarea paralelă a cadrelor și atingerea unei rate de procesare apropiate de timpul real.
+
+Rezultatele obținute confirmă îndeplinirea obiectivelor formulate în Secțiunea~\ref{sec:obiective}. Obiectivul central, acela de a construi o arhitectură unitară care să integreze și să optimizeze consumul de resurse hardware, a fost realizat prin separarea procesării pe fire de execuție specializate și prin mecanisme de optimizare. Al doilea obiectiv major, dezvoltarea unei logici aplicative inteligente de avertizare, a fost concretizat printr-un mecanism care evaluează evenimentele detectate în raport cu reguli de securitate prestabilite — corelând identitatea cu zona de acces și cu autorizațiile asociate —, reducând semnificativ alertele false sau redundante.
+
+Pe plan cantitativ, cele două modele antrenate în cadrul lucrării au atins performanțe competitive: modelul de recunoaștere a acțiunilor, obținut prin ajustarea fină a rețelei SlowFast~R50, a înregistrat o acuratețe de $94{,}33\%$, iar detectorul de arme bazat pe YOLOv8m a obținut o precizie medie medie (mAP@$0{,}5$) de $0{,}947$. Pentru detecția focului și a fumului, fluxul propriu de filtrare în cinci niveluri și validarea temporală au redus considerabil rata alarmelor false în comparație cu datele brute furnizate de detector. Aportul personal a fost detaliat și consolidat în Secțiunea~\ref{sec:contributii_proprii}; pe scurt, contribuțiile cu cea mai mare valoare constau în construcția unui set de date propriu pentru detecția vandalismului (614 secvențe video colectate, filtrate și editate manual), antrenarea celor două modele menționate, proiectarea algoritmilor de filtrare și de votare temporală pentru detecția focului/fumului și pentru recunoașterea plăcuțelor, precum și definirea arhitecturii de integrare care reunește toate componentele într-un sistem coerent.
+
+\section{Limitări ale soluției actuale}
+\label{sec:limitari}
+
+Cu toate că sistemul își îndeplinește obiectivele propuse, soluția prezintă o serie de limitări identificate în etapa de evaluare și testare (Capitolul~\ref{ch:testare}). Din punct de vedere arhitectural, aplicația este proiectată să ruleze pe un singur nod de calcul, utilizând o singură unitate de procesare grafică (GPU), iar persistența datelor este realizată local, aspect ce restricționează scalabilitatea sistemului în scenariile care implică un număr mare de fluxuri video simultane. La nivelul modulelor individuale, performanța tinde să scadă în cazuri-limită: plăcuțe de înmatriculare foarte murdare sau surprinse din unghiuri extreme, condiții de iluminare nocturnă în absența senzorilor cu infraroșu, precum și fețe de dimensiuni foarte reduse sau parțial acoperite. În plus, detectorul de arme înregistrează o rată de rezultate fals-negative de aproximativ $7\%$; deși această valoare este acceptabilă în contextul general al aplicației, ea impune prudență în cazul implementării în scenarii critice de securitate.
+
+\section{Direcții de dezvoltare viitoare}
+\label{sec:directii_viitoare}
+
+Soluția dezvoltată constituie o bază solidă, care poate fi îmbunătățită pe mai multe direcții:
+
+\begin{itemize}
+    \item \textbf{Re-identificarea persoanelor între camere} (cross-camera ReID), pentru urmărirea continuă a unui subiect în cadrul mai multor fluxuri video.
+    \item \textbf{Detecția căderilor} sau a persoanelor întinse la pământ, utilă în contexte de monitorizare a siguranței.
+    \item \textbf{Detecția obiectelor abandonate} în zone supravegheate.
+    \item \textbf{Migrarea către o arhitectură distribuită}, cu mai multe servere și procesoare grafice, pentru a depăși limitarea procesării pe un singur nod.
+    \item \textbf{Trecerea de la transportul cadrelor prin WebSocket cu codificare Base64 la protocolul WebRTC}, pentru reducerea latenței și a consumului de bandă.
+    \item \textbf{Integrarea cu sisteme externe de alarmare} (SMS, e-mail, sirene) și o aplicație mobilă cu notificări.
+    \item \textbf{Adăugarea unei funcții de căutare după imagine} (\emph{search by image}), pentru identificarea în arhivă a persoanelor asemănătoare unei fețe date.
+\end{itemize}
+
+În concluzie, lucrarea demonstrează fezabilitatea integrării mai multor sarcini complexe de viziune artificială într-un sistem unitar, performant și ușor de utilizat, oferind o alternativă deschisă și extensibilă la soluțiile comerciale închise și constituind un punct de plecare pentru dezvoltări ulterioare în domeniul supravegherii video inteligente.
+
 \end{document}
