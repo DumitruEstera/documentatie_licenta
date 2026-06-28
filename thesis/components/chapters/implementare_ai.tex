@@ -4,10 +4,10 @@
 
 \begin{document}
 
-\chapter{Implementarea Modulelor de Inteligență Artificială}
+\chapter{Implementarea Modulelor de \\ Inteligență Artificială}
 \label{ch:implementare_ai}
 
-\section{Privire de ansamblu și justificarea alegerii modelelor}
+\section{Privire de ansamblu și justificarea alegerii \\ modelelor}
 \label{sec:justificare_modele}
 
 Acest capitol descrie cele șase module de inteligență artificială ale sistemului -- recunoașterea facială, analiza demografică și emoțională, recunoașterea plăcuțelor de înmatriculare, detecția focului și a fumului, detecția armelor și recunoașterea acțiunilor umane --, precum și fuziunea rezultatelor acestora la nivel de cadru. Înainte de a detalia fiecare modul în parte, această secțiune oferă o imagine de ansamblu a sarcinilor de inteligență artificială rezolvate și justifică, pentru fiecare dintre ele, modelul (sau biblioteca) ales în raport cu alternativele relevante din literatură și din practica curentă.
@@ -151,27 +151,13 @@ abordarea tradițională, ar fi necesitat încărcarea și apelarea separată:
     \item capul \textbf{genderage} -- care estimează vârsta și genul persoanei.
 \end{itemize}
 
-Alegerea variantei \inlinecode{buffalo\_s} (în locul, de exemplu, a variantei
-\inlinecode{buffalo\_sc}) este motivată tehnic: rețeaua de recunoaștere
-\inlinecode{w600k\_mbf} este identică în ambele pachete, astfel încât reprezentările vectoriale
-de 512 dimensiuni rămân compatibile, însă \inlinecode{buffalo\_s}  include modulul suplimentar \texttt{genderage}, indispensabil pentru analiza demografică
-(secțiunea~\ref{sec:analiza_demografica}). În lipsa acestui modul de predicție, estimările privind vârsta și genul ar fi indisponibile, sistemul returnând valoarea \texttt{None}.
+Alegerea variantei \inlinecode{buffalo\_s} (în locul, de exemplu, a variantei \inlinecode{buffalo\_sc}) este motivată tehnic: rețeaua de recunoaștere \inlinecode{w600k\_mbf} este identică în ambele pachete, astfel încât reprezentările vectoriale de 512 dimensiuni rămân compatibile, însă \inlinecode{buffalo\_s}  include modulul suplimentar \texttt{genderage}, indispensabil pentru analiza demografică (secțiunea~\ref{sec:analiza_demografica}). În lipsa acestui modul de predicție, estimările privind vârsta și genul ar fi indisponibile, sistemul returnând valoarea \texttt{None}.
 
-Pentru fiecare cadru, metoda \inlinecode{process\_frame()} apelează
-\inlinecode{self.face\_app.} \inlinecode{get(frame)}, care efectuează într-o singură trecere
-detecția tuturor fețelor și, pentru fiecare, calculează bounding box-ul,
-landmark-urile, vectorul de caracteristici L2-normalizat (\inlinecode{normed\_embedding}, vector
-de 512 de elemente de tip \inlinecode{float32}) și estimările de vârstă și gen.
-Bounding box-ul de tip \inlinecode{[x1, y1, x2, y2]} returnat de InsightFace este
-convertit în formatul \inlinecode{(x, y, w, h)} și ancorat în limitele cadrului de
-metoda statică \inlinecode{\_bbox\_xyxy\_to\_xywh()}, pentru a evita decupaje în
-afara imaginii.
+Pentru fiecare cadru, metoda \inlinecode{process\_frame()} apelează \inlinecode{self.face\_app.} \inlinecode{get(frame)}, care efectuează într-o singură trecere detecția tuturor fețelor și, pentru fiecare, calculează bounding box-ul, landmark-urile, vectorul de caracteristici L2-normalizat (\inlinecode{normed\_embedding}, vector de 512 de elemente de tip \inlinecode{float32}) și estimările de vârstă și gen. Bounding box-ul de tip \inlinecode{[x1, y1, x2,} \inlinecode{y2]} returnat de InsightFace este
+convertit în formatul \inlinecode{(x, y, w, h)} și ancorat în limitele cadrului de metoda statică \inlinecode{\_bbox\_xyxy\_to\_xywh()}, pentru a evita decupaje în afara imaginii.
 
 \subsubsection{Configurarea execuției pe GPU}
-Inferența InsightFace rulează pe GPU prin runtime-ul ONNX, providerul \linebreak
-\inlinecode{CUDAExecutionProvider} fiind configurat explicit cu opțiunea
-\inlinecode{cudnn\_conv\_algo\_} \inlinecode{search="HEURISTIC"}. Această opțiune este o decizie de implementare importantă în contextul arhitecturii multi-threaded a aplicației:
-strategia implicită, \inlinecode{EXHAUSTIVE}, măsoară empiric timpul fiecărui
+Inferența InsightFace rulează pe GPU prin runtime-ul ONNX, providerul \linebreak \inlinecode{CUDAExecutionProvider} fiind configurat explicit cu opțiunea \inlinecode{cudnn\_conv\_} \inlinecode{algo\_} \inlinecode{search="HEURISTIC"}. Această opțiune este o decizie de implementare importantă în contextul arhitecturii multi-threaded a aplicației: strategia implicită, \inlinecode{EXHAUSTIVE}, măsoară empiric timpul fiecărui
 algoritm de convoluție folosind mecanismul de \textit{stream capture} al CUDA. Cum
 InsightFace rulează concurent cu modelele PyTorch (YOLO pentru plăcuțe, foc și arme,
 respectiv SlowFast pentru acțiuni) pe același GPU, o astfel de captură în desfășurare
@@ -181,15 +167,7 @@ baza unor euristici, fără benchmarking și deci fără captură, eliminând co
 între firele de execuție.
 
 \subsubsection{Gestionarea bibliotecilor CUDA și a TensorFlow}
-La importul modulului, funcția \inlinecode{\_preload\_nvidia\_pypi\_libs()}
-preîncarcă explicit, prin \inlinecode{ctypes.CDLL(..., RTLD\_GLOBAL)}, bibliotecile
-partajate CUDA, cuDNN și cuBLAS livrate în pachetele pip \inlinecode{nvidia-*-cu12},
-astfel încât \linebreak \inlinecode{onnxruntime} să le poată găsi fără a necesita setarea
-manuală a variabilei \linebreak \inlinecode{LD\_LIBRARY\_PATH}. În plus, TensorFlow (folosit
-de modelul de emoții) este forțat să nu folosească GPU-ul prin
-\inlinecode{set\_visible\_devices([], "GPU")}, deoarece menținerea lui pe GPU
-provoacă conflicte de context CUDA cu \inlinecode{onnxruntime} \inlinecode{-gpu} și segmentation
-fault la inițializare.
+La importul modulului, funcția \inlinecode{\_preload\_nvidia\_pypi\_libs()} preîncarcă explicit, prin \inlinecode{ctypes.CDLL(..., RTLD\_GLOBAL)}, bibliotecile partajate CUDA, cuDNN și cuBLAS livrate în pachetele pip \inlinecode{nvidia-*-cu12}, astfel încât \linebreak \inlinecode{onnxruntime} să le poată găsi fără a necesita setarea manuală a variabilei \inlinecode{LD\_} \inlinecode{LIBRARY\_PATH}. În plus, TensorFlow (folosit de modelul de emoții) este forțat să nu folosească GPU-ul prin \inlinecode{set\_visible\_devices([], "GPU")}, deoarece menținerea lui pe GPU provoacă conflicte de context CUDA cu \inlinecode{onnxruntime} \inlinecode{-gpu} și segmentation fault la inițializare.
 
 \subsubsection{Înregistrarea persoanelor}
 Reprezentările vectoriale ale persoanelor cunoscute sunt generate în momentul înregistrării acestora în sistem. Metoda \inlinecode{register\_person()} primește o listă de imagini faciale și execută modelul InsightFace pe fiecare dintre ele. În situația în care sunt detectate mai multe fețe într-o imagine, sistemul o selectează pe cea cu aria maximă a casetei de încadrare (\emph{bounding box}), prin intermediul funcției \inlinecode{\_extract\_single\_face()}. Ulterior, este extras \emph{vectorul de caracteristici} de 512 dimensiuni, care va fi stocat atât în baza de date, cât și în indexul FAISS. Pentru încărcările de imagini efectuate prin interfața web, metoda \inlinecode{extract\_embedding\_} \inlinecode{from\_image()} acceptă exclusiv imaginile care conțin o singură față detectabilă, prevenind astfel riscul asocierii ambigue a unui \emph{vector de caracteristici} cu o persoană.
@@ -217,7 +195,7 @@ dicționare de mapare: \inlinecode{id\_map}, care asociază fiecărui index FAIS
 multe reprezentări vectoriale, câte una pentru fiecare imagine înregistrată).
 
 \subsubsection{Persistența și reconstrucția indexului}
-Indexul FAISS este o structură de date alocată în memorie, în timp ce baza de date PostgreSQL constituie punctul central de stocare și referință pentru toți vectorii de caracteristici. În tabelul \inlinecode{face\_embeddings}, fiecare \emph{vector de caracteristici} este salvat în coloana \inlinecode{embedding} de tip \inlinecode{BYTEA}, fiind serializat cu ajutorul bibliotecii \inlinecode{pickle}. La pornirea sistemului, metoda \inlinecode{\_load\_embeddings\_from\_db()} preia toate datele prin \inlinecode{get\_all\_embeddings()} și reconstruiește complet indexul prin apelarea funcției \inlinecode{rebuild\_index()}. Această procedură de reconstrucție este declanșată automat ori de câte ori o persoană este înregistrată, modificată sau ștearsă, garantând astfel consistența strictă între stocarea persistentă și indexul volatil. 
+Indexul FAISS este o structură de date alocată în memorie, în timp ce baza de date PostgreSQL constituie punctul central de stocare și referință pentru toți vectorii de caracteristici. În tabelul \inlinecode{face\_embeddings}, fiecare \emph{vector de caracteristici} este salvat în coloana \inlinecode{embedding} de tip \inlinecode{BYTEA}, fiind serializat cu ajutorul bibliotecii \inlinecode{pickle}. La pornirea sistemului, metoda \inlinecode{\_load\_embeddings\_} \inlinecode{from\_db()} preia toate datele prin \inlinecode{get\_all\_embeddings()} și reconstruiește complet indexul prin apelarea funcției \inlinecode{rebuild\_index()}. Această procedură de reconstrucție este declanșată automat ori de câte ori o persoană este înregistrată, modificată sau ștearsă, garantând astfel consistența strictă între stocarea persistentă și indexul volatil. 
 
 \subsubsection{Siguranța accesului concurent}
 Întrucât firul de recunoaștere facială interoghează indexul în fiecare cadru, în
@@ -226,7 +204,7 @@ timp ce firele care deservesc cererile HTTP îl pot reconstrui (la înregistrare
 nu sunt sigure pentru execuția concurentă, toate accesările indexului și ale
 dicționarelor de mapare sunt serializate cu un lock reentrant
 (\inlinecode{threading.RLock}). Caracterul reentrant este necesar deoarece
-\inlinecode{rebuild\_index()} apelează intern \inlinecode{add\_embeddings} \inlinecode{\_batch()}, care preia același lock.
+\inlinecode{rebuild\_index()} apelează intern \inlinecode{add\_embeddings} \linebreak \inlinecode{\_batch()}, care preia același lock.
 
 \subsection{Strategia de matching}
 \label{subsec:matching}
@@ -260,7 +238,7 @@ metoda returnează \inlinecode{None} (față necunoscută). În caz contrar, dis
 convertită în similaritate cosinus, mărginită la intervalul $[0;\ 1]$ și raportată ca
 nivel de încredere; identificatorul persoanei este apoi rezolvat în datele complete
 (nume, ID angajat, departament) prin \inlinecode{get\_person\_by\_id()}. În metoda
-\inlinecode{process\_frame()}, o față este considerată cunoscută doar dacă există o
+\inlinecode{process\_} \inlinecode{frame()}, o față este considerată cunoscută doar dacă există o
 potrivire \textit{și} încrederea ei depășește \inlinecode{min\_confidence}. Pentru
 fiecare potrivire validă se înregistrează un eveniment de acces în baza de date prin
 \inlinecode{log\_access()}.
@@ -308,7 +286,7 @@ def match_embedding(embedding):
 \label{lst:matching_facial}
 \end{listing}
 
-\subsection{Optimizarea: omiterea analizei demografice pentru fețele cunoscute}
+\subsection{Optimizarea: omiterea analizei demografice pentru \\ fețele cunoscute}
 \label{subsec:optimizare_demografica}
 
 O optimizare deliberată la nivelul \emph{pipeline}-ului de procesare facială constă în condiționarea analizei demografice de rezultatul etapei de recunoaștere. Vârsta și genul sunt generate de modulul \inlinecode{genderage} al arhitecturii InsightFace pentru toate fețele dintr-un cadru, în aceeași trecere care produce și vectorul de caracteristici --- acest cost nu poate fi evitat per-față. În cadrul funcției \inlinecode{process\_frame()}, aceste atribute sunt însă reținute și expuse \emph{exclusiv pentru fețele necunoscute}, iar emoția prezisă de rețeaua Mini-Xception (detaliată în Secțiunea~\ref{sec:analiza_demografica}) este calculată tot \emph{numai pentru fețele necunoscute}, printr-o trecere suplimentară. În cazul unei persoane identificate cu succes, câmpurile \inlinecode{age}, \inlinecode{gender}, \inlinecode{emotion} și \inlinecode{emotion\_confidence} sunt inițializate direct cu valoarea \inlinecode{None}.
@@ -422,14 +400,14 @@ Figura~\ref{fig:plate_flow} ilustrează întregul flux de prelucrare, de la dete
 \begin{figure}[htbp]
 	\centering
 	\includegraphics[height=0.9\textheight]{plate_flow.pdf}
-	\caption{Fluxul de procesare al modulului de recunoaștere a plăcuțelor. Fiecare plăcuță detectată de YOLOv8 este decupată cu o margine de context, mărită dacă este prea mică și supusă unui lanț de patru operații de preprocesare. Doar după consensul pe minimum trei cadre se interoghează baza de date și se decide autorizarea (casetă verde) sau respingerea (casetă roșie).}
+	\caption{Fluxul de procesare pentru recunoașterea plăcuțelor. Plăcuțele detectate de YOLOv8 sunt decupate cu o margine de context, redimensionate și trecute prin patru etape de preprocesare. După un consens pe minim trei cadre, se interoghează baza de date pentru autorizare (verde) sau respingere (roșu).}
 	\label{fig:plate_flow}
 \end{figure}
 
 \subsection{Detecția plăcuțelor cu YOLOv8}
 \label{subsec:detectie_placute}
 
-Localizarea plăcuțelor în cadru este realizată cu ajutorul unui model YOLOv8, instanțiat prin intermediul clasei \inlinecode{YOLO} din pachetul \inlinecode{ultralytics}, pe baza fișierului de ponderi \inlinecode{models/license\_plate/best.pt}. Modelul de bază utilizat este \inlinecode{harshitsingh09/yolov8-license-plate-detector}, o variantă a arhitecturii YOLOv8 publicată pe platforma Kaggle și dedicată exclusiv detecției plăcuțelor de înmatriculare (având definită o singură clasă, \inlinecode{license\_plate}). Modelul a fost integrat în sistem în forma sa originală, fără a necesita o etapă suplimentară de antrenare (ajustare fină) în cadrul acestui proiect. La momentul inițializării, pentru a optimiza viteza de inferență, sistemul verifică disponibilitatea mediului CUDA și, în caz afirmativ, transferă execuția modelului pe unitatea GPU.
+Localizarea plăcuțelor în cadru este realizată cu ajutorul unui model YOLOv8, instanțiat prin intermediul clasei \inlinecode{YOLO} din pachetul \inlinecode{ultralytics}, pe baza fișie-rului de ponderi \inlinecode{models/license\_plate/best.pt}. Modelul de bază utilizat este \inlinecode{harshitsingh09/yolov8-license-plate-detector}, o variantă a arhitecturii YOLOv8 publicată pe platforma Kaggle și dedicată exclusiv detecției plăcuțelor de înmatriculare (având definită o singură clasă, \inlinecode{license\_plate}). Modelul a fost integrat în sistem în forma sa originală, fără a necesita o etapă suplimentară de antrenare (ajustare fină) în cadrul acestui proiect. La momentul inițializării, pentru a optimiza viteza de inferență, sistemul verifică disponibilitatea mediului CUDA și, în caz afirmativ, transferă execuția modelului pe unitatea GPU.
 
 Pentru fiecare cadru procesat, metoda \inlinecode{process\_frame()} apelează funcția \inlinecode{predict()} utilizând parametrul \inlinecode{imgsz=640} și un prag de confidență \inlinecode{conf=0.25}, extrăgând astfel casetele de încadrare candidate (\emph{bounding boxes}). Fiecare casetă, definită prin coordonatele \inlinecode{[x1, y1, x2, y2]}, este ulterior \textit{extinsă} cu 20\% în toate direcțiile prin intermediul funcției \inlinecode{expand\_bbox()} (utilizând un coeficient \inlinecode{pad\_ratio} de \inlinecode{0.20}). Această margine de siguranță mai generoasă garantează includerea limitelor fizice ale plăcuței alături de un context vizual minim, prevenind astfel decuparea accidentală a caracterelor aflate la extremități înaintea evaluării OCR. Regiunea decupată rezultată este transmisă etapelor ulterioare de prelucrare.
 
@@ -444,7 +422,7 @@ Deoarece plăcuțele detectate prezintă frecvent dimensiuni insuficiente pentru
 Imaginea mărită este ulterior pregătită pentru etapa de recunoaștere optică a textului (OCR) prin intermediul funcției \inlinecode{preprocess\_plate()}. Aceasta aplică o secvență de patru operații, optimizată special pentru a maximiza performanța algoritmului EasyOCR în identificarea plăcuțelor de înmatriculare:
 
 \begin{enumerate}
-    \item \textbf{Conversie în tonuri de gri} -- imaginea color este transformată în
+    \item \textbf{Conversie în tonuri de gri} -- imaginea color este transformată în \linebreak
     grayscale;
     \item \textbf{Filtru bilateral} (\inlinecode{cv2.bilateralFilter} cu $d=11$ și sigma de
     culoare și de spațiu de $17$) -- reduce zgomotul, păstrând în același timp muchiile
@@ -464,7 +442,7 @@ nu la o imagine alb-negru.
 \subsection{Apelul EasyOCR}
 \label{subsec:apel_easyocr}
 
-Citirea propriu-zisă a caracterelor este realizată de EasyOCR în metoda
+Citirea propriu-zisă a caracterelor este realizată de EasyOCR în metoda \linebreak
 \inlinecode{\_run\_ocr()}. Apelul \inlinecode{reader.readtext()} este parametrizat specific
 pentru plăcuțe:
 
@@ -506,7 +484,7 @@ Fiecare traiectorie menține un istoric al citirilor recente, stocat într-o str
 \subsection{Validarea formatului}
 \label{subsec:validare_format}
 
-Înainte de a fi inclusă în procesul decizional de agregare, fiecare citire este validată în raport cu formatul standard al plăcuțelor de înmatriculare din România, prin intermediul expresiei regulate \inlinecode{ROMANIAN\_PLATE\_RE}. Această regulă acceptă configurații formate din una sau două litere pentru indicativul județului, urmate de două sau trei cifre și un grup final de trei litere (de exemplu, \inlinecode{CJ12ABC} sau, specific pentru București, \inlinecode{B123ABC}). În cadrul metodei \inlinecode{PlateTracker.update()}, un rezultat OCR este adăugat în istoricul instanței de urmărire exclusiv dacă îndeplinește cumulativ trei condiții: este un șir nevid, prezintă un scor de confidență de minimum \inlinecode{0.4} \textit{și} respectă strict formatul impus. Rezultatele incorect formatate (provenite, în general, din erori ale modulului OCR) sunt astfel filtrate anterior etapei de evaluare, contribuind la o creștere semnificativă a robusteței rezultatului final.
+Înainte de a fi inclusă în procesul decizional de agregare, fiecare citire este validată în raport cu formatul standard al plăcuțelor de înmatriculare din România, prin intermediul expresiei regulate \inlinecode{ROMANIAN\_PLATE\_RE}. Această regulă acceptă configurații formate din una sau două litere pentru indicativul județului, urmate de două sau trei cifre și un grup final de trei litere (de exemplu, \inlinecode{CJ12ABC} sau, specific pentru București, \inlinecode{B123ABC}). În cadrul metodei \inlinecode{PlateTracker.} \inlinecode{update()}, un rezultat OCR este adăugat în istoricul instanței de urmărire exclusiv dacă îndeplinește cumulativ trei condiții: este un șir nevid, prezintă un scor de confidență de minimum \inlinecode{0.4} \textit{și} respectă strict formatul impus. Rezultatele incorect formatate (provenite, în general, din erori ale modulului OCR) sunt astfel filtrate anterior etapei de evaluare, contribuind la o creștere semnificativă a robusteței rezultatului final.
 
 \subsection{Votarea temporală}
 \label{subsec:votare_temporala}
@@ -574,7 +552,7 @@ Figura~\ref{fig:fire_flow} ilustrează acest mecanism sub forma unei cascade de 
 \begin{figure}[htbp]
 	\centering
 	\includegraphics[height=0.9\textheight]{fire_flow.pdf}
-	\caption{\textbf{Cascada de filtrare foc/fum.} Detecțiile YOLOv10 parcurg cinci etape: încredere, dimensiune, analiză HSV, agregare temporală IoU și \textit{cooldown}. Rezultatele sunt progresiv respinse (gri), în așteptare (portocaliu), confirmate vizual (verde) sau marcate ca alertă (roșu). Indicatorii \texttt{confirmed} și \texttt{alert} separă starea validată de evenimentul declanșat.}
+	\caption{\textbf{Cascada de filtrare foc/fum.} Detecțiile YOLOv10 parcurg cinci etape: încredere, dimensiune, analiză HSV, agregare temporală IoU și \textit{cooldown}. Rezultatele sunt progresiv respinse (gri), în așteptare (portocaliu), confirmate vizual (verde) sau marcate ca alertă (roșu).}
 	\label{fig:fire_flow}
 \end{figure}
 
@@ -754,7 +732,7 @@ Figura~\ref{fig:weapon_pipeline} oferă o imagine de ansamblu a întregului flux
 \begin{figure}[htbp]
 	\centering
 	\includegraphics[height=0.9\textheight]{weapon_pipeline.pdf}
-	\caption{Fluxul de date și antrenare a detectorului de arme. Cele patru scripturi execută secvențial: (1) descărcarea seturilor Zenodo și Roboflow; (2) unificarea lor (remapare pe o clasă, reținerea exemplelor negative și formatare YOLO); (3) antrenarea modelului YOLOv8m (\texttt{best.pt}); (4) evaluarea pe datele de test. Ponderile validate sunt ulterior integrate în aplicația de supraveghere.}
+	\caption{Fluxul de date și antrenare a detectorului de arme. Cele patru scripturi execută secvențial: (1) descărcarea seturilor Zenodo și Roboflow; (2) unificarea lor (remapare pe o clasă, reținerea exemplelor negative și formatare YOLO); (3) antrenarea modelului YOLOv8m; (4) evaluarea pe datele de test.}
 	\label{fig:weapon_pipeline}
 \end{figure}
 
@@ -772,7 +750,7 @@ Modelul de bază ales pentru antrenarea suplimentară (ajustare fină) este \lin
 \subsection{Seturile de date utilizate}
 \label{subsec:dataseturi_arme}
 
-Deoarece niciun set de date public nu oferea, în mod individual, o acoperire suficientă pentru diversitatea tipurilor de arme, a condițiilor de iluminare și a perspectivelor necesare, s-a decis combinarea a două seturi de date independente. Acestea au fost preluate automat prin intermediul scriptului \inlinecode{01\_download\_datasets.py}:
+Deoarece niciun set de date public nu oferea, în mod individual, o acoperire suficientă pentru diversitatea tipurilor de arme, a condițiilor de iluminare și a perspectivelor necesare, s-a decis combinarea a două seturi de date independente. Acestea au fost preluate automat prin intermediul scriptului \inlinecode{01\_download\_} \inlinecode{datasets.py}:
 
 \begin{itemize}
     \item \textbf{Dangerous Items} (Zenodo) -- 8.478 de imagini, cu cinci clase originale, toate
@@ -875,7 +853,7 @@ următorii parametri principali:
     \item \textbf{Batch size}: 16 imagini per batch;
     \item \textbf{Rezoluția de intrare}: $640 \times 640$ pixeli, valoarea standard pentru YOLOv8;
     \item \textbf{Optimizator}: AdamW, cu learning rate inițial $lr_0 = 0{,}001$ și factor final
-    $lr_f = 0{,}01$, conform unei programări cosinus a ratei de învățare
+    $lr_f = 0{,}01$, conform unei programări cosinus a ratei de învățare \linebreak
     (\inlinecode{cos\_lr=True}), și \inlinecode{weight\_decay} $= 0{,}0005$;
     \item \textbf{Warmup}: 3 epoci de warmup pentru stabilizarea gradienților la începutul
     antrenării.
@@ -1229,7 +1207,7 @@ Alți parametri și tehnici folosite, conform \inlinecode{config.py} și \inline
     permite folosirea simultană a unui eșantionator și a amestecării aleatoare, \inlinecode{shuffle}
     este dezactivat automat când eșantionatorul este activ, ordinea aleatoare fiind deja asigurată de
     extragerea ponderată.)
-    \item \textbf{Tehnici de stabilizare}: antrenare cu precizie mixtă (AMP, utilizând \inlinecode{GradScaler} și \inlinecode{autocast}), limitarea gradientului (\textit{gradient clipping}) la norma maximă de $5{,}0$ și oprire timpurie (\textit{early stopping}) cu o toleranță de 7 epoci, evaluată pe baza scorului macro-F1 de validare;
+    \item \textbf{Tehnici de stabilizare}: antrenare cu precizie mixtă (AMP, utilizând \linebreak \inlinecode{GradScaler} și \inlinecode{autocast}), limitarea gradientului (\textit{gradient clipping}) la norma maximă de $5{,}0$ și oprire timpurie (\textit{early stopping}) cu o toleranță de 7 epoci, evaluată pe baza scorului macro-F1 de validare;
     \item \textbf{Augmentare spațială}: oglindire orizontală, \textit{color jitter} și
     \textit{random crop}.
 \end{itemize}
@@ -1314,7 +1292,7 @@ Erorile de clasificare se manifestă predominant între clasele \inlinecode{norm
 \subsubsection{Integrarea în aplicație}
 La rulare, modelul antrenat este folosit de \inlinecode{HumanActionRecognitionSystem}, care nu
 poate clasifica un singur cadru, ci are nevoie de o secvență. De aceea, sistemul acumulează
-cadrele primite într-un \textit{ring buffer} (\inlinecode{deque}) și rulează inferența doar o dată
+cadrele primite într-un \textit{ring buffer} (\inlinecode{deque}) și rulează infe-rența doar o dată
 la fiecare \inlinecode{30} de cadre (\inlinecode{clip\_interval\_frames}), atunci când bufferul
 conține destule cadre. La fiecare inferență, se eșantionează uniform până la 64 de cadre din
 buffer, se construiește perechea slow/fast (8/32 cadre, $224 \times 224$) exact ca la antrenare, se
@@ -1428,19 +1406,19 @@ acel moment de timp.
 
 În cadrul aceleiași etape de fuziune, detecțiile de interes sunt convertite în două categorii de înregistrări persistente: \textit{jurnale de detecție} (un istoric exhaustiv, generat prin apelul funcției \inlinecode{\_log\_detection\_if\_needed()}) și \textit{alarme} propriu-zise (evenimente critice care necesită atenția imediată a operatorului). Sunt clasificate drept evenimente de alarmă următoarele situații: prezența persoanelor neidentificate, detectarea confirmată a focului (marcată cu parametrul \inlinecode{alert}), identificarea unor acțiuni diferite de clasa \inlinecode{normal}, detecția armamentului, prezența vehiculelor neautorizate (plăcuțe lizibile care nu figurează în lista de acces) și pătrunderea unei persoane neautorizate într-o zonă restricționată.
 
-Problema principală în gestionarea alarmelor o constituie evitarea saturării operatorului cu notificări redundante: un focar de incendiu activ timp de 10 secunde nu trebuie să declanșeze o avertizare la fiecare cadru analizat. Mecanismul de deduplicare, implementat în metoda \inlinecode{\_create\_alarm\_if\_needed()}, utilizează o cheie de indexare compusă, formată din identificatorul camerei, tipul evenimentului și \textit{subiectul} alarmei (\inlinecode{camera\_id:alarm\_type:dedup\_subject}), impunând o perioadă de latență (\textit{cooldown}) de 30 de secunde pentru fiecare cheie unică. Includerea subiectului în cheie este esențială, deoarece permite coexistența unor alarme distincte de \textit{același} tip -- de exemplu, două persoane necunoscute diferite (diferențiate pe baza coordonatelor spațiale), un cuțit și un pistol, sau două autovehicule neautorizate distincte -- fără ca acestea să fie comasate eronat într-o singură alertă. Complementar acestui mecanism de filtrare în memoria volatilă, sistemul execută o verificare redundantă în baza de date (prin metoda \inlinecode{get\_recent\_alarm()}). Această abordare previne o cascadă de alarme duplicate ce ar putea surveni imediat după o repornire a serverului, moment în care istoricul stărilor de latență din memorie este neinițializat.
+Problema principală în gestionarea alarmelor o constituie evitarea saturării operatorului cu notificări redundante: un focar de incendiu activ timp de 10 secunde nu trebuie să declanșeze o avertizare la fiecare cadru analizat. Mecanismul de deduplicare, implementat în metoda \inlinecode{\_create\_alarm\_if\_needed()}, utilizează o cheie de indexare compusă, formată din identificatorul camerei, tipul evenimentului și \textit{subiectul} alarmei (\inlinecode{camera\_id:alarm\_type:dedup\_} \linebreak \inlinecode{subject}), impunând o perioadă de latență (\textit{cooldown}) de 30 de secunde pentru fiecare cheie unică. Includerea subiectului în cheie este esențială, deoarece permite coexistența unor alarme distincte de \textit{același} tip -- de exemplu, două persoane necunoscute diferite (diferențiate pe baza coordonatelor spațiale), un cuțit și un pistol, sau două autovehicule neautorizate distincte -- fără ca acestea să fie comasate eronat într-o singură alertă. Complementar acestui mecanism de filtrare în memoria volatilă, sistemul execută o verificare redundantă în baza de date (prin metoda \inlinecode{get\_recent\_alarm()}). Această abordare previne o cascadă de alarme duplicate ce ar putea surveni imediat după o repornire a serverului, moment în care istoricul stărilor de latență din memorie este neinițializat.
 
 \subsection{Difuzarea către clienți prin WebSocket}
 \label{subsec:difuzare}
 
-Ultima etapă a procesului de fuziune constă în transmiterea cadrului agregat către interfețele clienților. Imaginea \inlinecode{final\_frame} este redimensionată (la o lățime maximă de 800~px), comprimată în format JPEG cu un factor de calitate de 75 și convertită în format Base64 prin intermediul funcției \inlinecode{\_encode\_and\_queue} \inlinecode{\_frame()}. Datele sunt apoi încapsulate într-un obiect JSON care conține, pe lângă imaginea propriu-zisă, listele serializate cu rezultatele tuturor modulelor (\inlinecode{face\_results}, \inlinecode{plate\_results}, \inlinecode{fire\_results}, \inlinecode{har\_results}, \inlinecode{weapon} \inlinecode{\_results}), identificatorul camerei, un marcaj temporal (\textit{timestamp}) și starea curentă (activat/dezactivat) a fiecărui modul.
+Ultima etapă a procesului de fuziune constă în transmiterea cadrului agregat către interfețele clienților. Imaginea \inlinecode{final\_frame} este redimensionată (la o lățime maximă de 800~px), comprimată în format JPEG cu un factor de calitate de 75 și convertită în format Base64 prin intermediul funcției \inlinecode{\_encode\_and\_} \inlinecode{queue\_frame()}. Datele sunt apoi încapsulate într-un obiect JSON care conține, pe lângă imaginea propriu-zisă, listele serializate cu rezultatele tuturor modulelor (\inlinecode{face\_results}, \inlinecode{plate\_results}, \inlinecode{fire\_results}, \inlinecode{har\_results}, \inlinecode{weapon} \inlinecode{\_results}), identificatorul camerei, un marcaj temporal (\textit{timestamp}) și starea curentă (activat/dezactivat) a fiecărui modul.
 
-Difuzarea mesajelor (\inlinecode{\_broadcast\_frame()}) utilizează un model de distribuție de tip \textit{fan-out}, implementat cu cozi independente pentru fiecare client. Mai exact, fiecare utilizator conectat prin WebSocket dispune de propria coadă de ieșire, iar firul de fuziune inserează fiecare cadru procesat în toate aceste cozi. Această izolare arhitecturală este esențială: în cazul în care un client are o conexiune mai lentă și coada i se umple, acesta va elimina automat doar cel mai vechi cadru din propriul flux, fără a interfera cu pachetele destinate celorlalți clienți și fără a genera întârzieri la nivelul sistemului. Astfel, fluxul video adnotat este livrat fiecărui operator în mod independent, finalizând ciclul de procesare inițiat la captura cadrului brut.
+Difuzarea mesajelor (\inlinecode{\_broadcast\_frame()}) utilizează un model de distri-buție de tip \textit{fan-out}, implementat cu cozi independente pentru fiecare client. Mai exact, fiecare utilizator conectat prin WebSocket dispune de propria coadă de ieșire, iar firul de fuziune inserează fiecare cadru procesat în toate aceste cozi. Această izolare arhitecturală este esențială: în cazul în care un client are o conexiune mai lentă și coada i se umple, acesta va elimina automat doar cel mai vechi cadru din propriul flux, fără a interfera cu pachetele destinate celorlalți clienți și fără a genera întârzieri la nivelul sistemului. Astfel, fluxul video adnotat este livrat fiecărui operator în mod independent, finalizând ciclul de procesare inițiat la captura cadrului brut.
 
 \section{Contribuții proprii}
 \label{sec:contributii_proprii}
 
-Capitolele de proiectare (Capitolul~\ref{ch:analiza_proiectare}) și de implementare a modulelor de inteligență artificială (capitolul de față) descriu sistemul în ansamblul său, integrând atât componente utilizate în forma lor inițială din ecosistemul \textit{open-source}, cât și soluții dezvoltate specific în cadrul acestui proiect. Întrucât aportul personal este distribuit pe parcursul ambelor capitole și este, prin natura sa, dificil de izolat în cadrul unei lecturi secvențiale, această secțiune îl recapitulează și îl prezintă explicit, sub forma unor contribuții numerotate (\texttt{C\textit{x}}). Fiecare contribuție face trimitere, prin referință încrucișată, la secțiunea în care este tratată în detaliu, astfel încât aportul propriu să poată fi delimitat fără ambiguitate de utilizarea modelelor și a bibliotecilor preexistente.
+Capitolele de proiectare (Capitolul~\ref{ch:analiza_proiectare}) și de implementare a modulelor de inteli-gență artificială (capitolul de față) descriu sistemul în ansamblul său, integrând atât componente utilizate în forma lor inițială din ecosistemul \textit{open-source}, cât și soluții dezvoltate specific în cadrul acestui proiect. Întrucât aportul personal este distribuit pe parcursul ambelor capitole și este, prin natura sa, dificil de izolat în cadrul unei lecturi secvențiale, această secțiune îl recapitulează și îl prezintă explicit, sub forma unor contribuții numerotate (\texttt{C\textit{x}}). Fiecare contribuție face trimitere, prin referință încrucișată, la secțiunea în care este tratată în detaliu, astfel încât aportul propriu să poată fi delimitat fără ambiguitate de utilizarea modelelor și a bibliotecilor preexistente.
 
 Pentru claritate, contribuțiile sunt grupate în trei categorii: contribuții de \emph{proiectare și arhitectură} a sistemului integrat, contribuții \emph{algoritmice și de procesare} la nivelul modulelor, respectiv contribuții privind \emph{modelele antrenate și seturile de date} construite. Pe ansamblu, contribuția majoră nu constă în dezvoltarea de la zero a unor noi arhitecturi neuronale, ci în \emph{integrarea} a cinci familii eterogene de detectoare într-un singur sistem de timp real, coerent și operațional. Acestui efort i se adaugă construirea celor două componente pentru care nu existau soluții standard pre-antrenate: detectorul de arme și modulul de recunoaștere a acțiunilor umane.
 
@@ -1456,9 +1434,9 @@ Pentru claritate, contribuțiile sunt grupate în trei categorii: contribuții d
 
 	\item[C4 --] \textbf{Mecanism de tip \emph{cel mai recent rezultat disponibil} pentru decuplarea ratei de redare de modulul cu cea mai mare latență.} Proiectarea unei strategii de compunere a cadrelor prin care firul de fuziune nu așteaptă finalizarea tuturor inferențelor pentru imaginea curentă, ci stochează și actualizează continuu cele mai recente rezultate per cameră, suprapunându-le peste ultimul cadru capturat. Acest mecanism asigură menținerea fluidității fluxului video la frecvența sursei ($\sim$30~FPS), independent de constrângerile unui detector cu procesare temporală la nivel de secvență (precum HAR, care produce ieșiri la $\sim$2~s) sau de latența ridicată inerentă modulului de recunoaștere facială (\S\ref{sec:pipeline_multithread}, \S\ref{sec:fuziune}).
 
-	\item[C5 --] \textbf{Structurarea modelului conceptual de evenimente în detecții, jurnale și alarme.} Proiectarea unei arhitecturi a evenimentelor bazată pe trei niveluri distincte de persistență, cu cicluri de viață specifice: detecția volatilă (la nivel de cadru), jurnalul pasiv interogabil (optimizat printr-o fereastră de deduplicare de 5~s) și alarma operațională (deduplicată la un interval de 30~s, asociată unui nivel de severitate, unei capturi de imagine/\textit{snapshot} și unor stări terminale de validare: \texttt{resolved} / \texttt{false\_alarm}). În cadrul acestui model, mecanismele de jurnalizare și alarmare funcționează ca două fluxuri informaționale \emph{paralele} și complementare (\S\ref{subsec:model_evenimente}).	
+	\item[C5 --] \textbf{Structurarea modelului conceptual de evenimente în detecții, jurnale și alarme.} Proiectarea unei arhitecturi a evenimentelor bazată pe trei niveluri distincte de persistență, cu cicluri de viață specifice: detecția volatilă (la nivel de cadru), jurnalul pasiv interogabil (optimizat printr-o fereastră de deduplicare de 5~s) și alarma operațională (deduplicată la un interval de 30~s, asociată unui nivel de severitate, unei capturi de imagine/\textit{snapshot} și unor stări terminale de validare: \texttt{resolved} / \texttt{false\_} \inlinecode{alarm}). În cadrul acestui model, mecanismele de jurnalizare și alarmare funcționează ca două fluxuri informaționale \emph{paralele} și complementare (\S\ref{subsec:model_evenimente}).	
 
-	\item[C6 --] \textbf{Mecanism centralizat de deduplicare a alarmelor utilizând cheia compusă \texttt{(cameră, tip, subiect)}.} Proiectarea unei logici de (\textit{cooldown}) care utilizează parametrul de identificare \texttt{dedup\_subject} (cuantizare spațială pentru persoanele necunoscute, \texttt{employee\_id} pentru personalul autorizat, eticheta acțiunii sau numărul de înmatriculare) pentru a distinge și separa detecțiile concurente de același tip. Acest mecanism este consolidat printr-o validare redundantă (\textit{backstop}) la nivelul bazei de date, concepută special pentru a preveni generarea în cascadă a înregistrărilor duplicate în eventualitatea unei reporniri a sistemului (\S\ref{subsec:dedup}, \S\ref{subsec:alarme}).
+	\item[C6 --] \textbf{Mecanism centralizat de deduplicare a alarmelor utilizând cheia compusă \texttt{(cameră, tip, subiect)}.} Proiectarea unei logici de (\textit{cooldown}) care utilizează parametrul de identificare \texttt{dedup\_subject} (cuantizare spa-țială pentru persoanele necunoscute, \texttt{employee\_id} pentru personalul autorizat, eticheta acțiunii sau numărul de înmatriculare) pentru a distinge și separa detecțiile concurente de același tip. Acest mecanism este consolidat printr-o validare redundantă (\textit{backstop}) la nivelul bazei de date, concepută special pentru a preveni generarea în cascadă a înregistrărilor duplicate în eventualitatea unei reporniri a sistemului (\S\ref{subsec:dedup}, \S\ref{subsec:alarme}).
 
 	\item[C7 --] \textbf{Configurarea dinamică a modulelor de inteligență artificială în timpul execuției, fără repornirea serverului.} Proiectarea unui mecanism de activare și dezactivare individuală a celor șase module prin intermediul unor puncte terminale API dedicate (\textit{endpoints} de tip comutator/\textit{toggle}). Această soluție exploatează eficient arhitectura concurentă a aplicației: dezactivarea unui modul se traduce prin întreruperea direcționării cadrelor către coada aferentă detectorului, firul de execuție intrând într-o stare de așteptare pasivă (blocare la nivelul operațiunii \texttt{get()}) fără a consuma resurse computaționale (\S\ref{sec:pipeline_multithread}, cerințele F7bis și NF5 din Capitolul~\ref{ch:analiza_proiectare}).
 
@@ -1477,11 +1455,11 @@ Pentru claritate, contribuțiile sunt grupate în trei categorii: contribuții d
 \begin{description}
 	\item[C12 --] \textbf{Strategie de comparare facială utilizând un sistem cu prag dublu și procedură de calibrare.} Implementarea algoritmului de identificare pe baza conversiei analitice a distanței euclidiene ($L_2$) în similaritate cosinus pentru vectorii de trăsături normalizați ($\cos\theta = 1 - \frac{L_2^2}{2}$). Metoda combină un prag restrictiv pentru distanța vectorială cu un prag minim pentru scorul de certitudine (\textit{confidence score}), fiind completată de un mecanism de calibrare a distanțelor (\S\ref{subsec:matching}).
 
-	\item[C13 --] \textbf{Optimizarea condiționată a analizei demografice și a recunoaș-terii emoțiilor.} Restrângerea calculului atributelor vizuale secundare (vârstă, gen, stare emoțională) \emph{exclusiv la nivelul fețelor necunoscute}. Această decizie elimină o etapă de inferență redundantă prin rețeaua dedicată recunoașterii emoțiilor pentru persoanele a căror identitate a fost deja confirmată, reducând semnificativ costul computațional la nivelul fiecărui cadru procesat (\S\ref{subsec:optimizare_demografica}).
+	\item[C13 --] \textbf{Optimizarea condiționată a analizei demografice și a recunoașterii emoțiilor.} Restrângerea calculului atributelor vizuale secundare (vârstă, gen, stare emoțională) \emph{exclusiv la nivelul fețelor necunoscute}. Această decizie elimină o etapă de inferență redundantă prin rețeaua dedicată recunoașterii emoțiilor pentru persoanele a căror identitate a fost deja confirmată, reducând semnificativ costul computațional la nivelul fiecărui cadru procesat (\S\ref{subsec:optimizare_demografica}).
 
 	\item[C14 --] \textbf{Integrarea decuplată a clasificatorului de emoții Mini-Xception.} Eliminarea dependenței de detectorul intern în cascadă (tip Haar) al pachetului \texttt{fer}, prin furnizarea directă către model a regiunii faciale deja extrase de modulul InsightFace. Această abordare a presupus implementarea unui flux de preprocesare personalizat (conversie în tonuri de gri, redimensionare spațială și normalizare în intervalul $[-1, 1]$) și direcționarea intenționată a inferenței către procesorul central (CPU), având ca scop eliberarea resurselor computaționale ale plăcii grafice (GPU) (\S\ref{subsec:emotii_xception}, \S\ref{subsec:inferenta_cpu}).
 
-	\item[C15 --] \textbf{Fluxul de preprocesare și procedura de rezervă pentru recu-noașterea optică a plăcuțelor de înmatriculare.} Implementarea unui lanț de prelucrare a imaginilor optimizat pentru extragerea textului din cadre degradate sau cu rezoluție redusă. Acesta include mărirea rezoluției prin interpolare bicubică (\texttt{INTER\_CUBIC}), aplicarea unui filtru bilateral, egalizarea adaptivă a histogramei (CLAHE) și accentuarea contururilor (\textit{unsharp mask}), cu omiterea intenționată a binarizării. Procesul este completat de un mecanism alternativ (\textit{fallback}), care reevaluează secțiunea pe baza imaginii originale color în situațiile în care scorul de certitudine al detecției inițiale este insuficient (\S\ref{subsec:upscaling}--\S\ref{subsec:fallback_color}).
+	\item[C15 --] \textbf{Fluxul de preprocesare și procedura de rezervă pentru recunoașterea optică a plăcuțelor de înmatriculare.} Implementarea unui lanț de prelucrare a imaginilor optimizat pentru extragerea textului din cadre degradate sau cu rezoluție redusă. Acesta include mărirea rezoluției prin interpolare bicubică (\texttt{INTER\_CUBIC}), aplicarea unui filtru bilateral, egalizarea adaptivă a histogramei (CLAHE) și accentuarea contururilor (\textit{unsharp mask}), cu omiterea intenționată a binarizării. Procesul este completat de un mecanism alternativ (\textit{fallback}), care reevaluează secțiunea pe baza imaginii originale color în situațiile în care scorul de certitudine al detecției inițiale este insuficient (\S\ref{subsec:upscaling}--\S\ref{subsec:fallback_color}).
 
 	\item[C16 --] \textbf{Stabilizarea recunoașterii plăcuțelor de înmatriculare prin urmărire spațială și agregare temporală.} Implementarea unui modul de urmărire (\textit{tracker}) bazat pe metrica intersecției peste reuniune (IoU), acompaniat de o validare a formatului pe baza unei expresii regulate specifice standardului românesc. Decizia finală este obținută printr-un mecanism de vot majoritar, ponderat cu scorul de certitudine, aplicat pe o fereastră temporală glisantă. Rezultatul este validat și interogat în baza de date exclusiv după atingerea unui consens pe minimum trei cadre, eliminând astfel erorile tranzitorii de recunoaștere (\S\ref{subsec:tracking_placute}, \S\ref{subsec:votare_temporala}).
 
@@ -1498,7 +1476,7 @@ Pentru claritate, contribuțiile sunt grupate în trei categorii: contribuții d
 
 	\item[C20 --] \textbf{Constituirea unui set de date dedicat pentru recunoașterea actelor de vandalism.} Dezvoltarea integrală a unui corpus de date video pentru clasa \texttt{vandalism} --- categorie insuficient reprezentată în resursele publice actuale --- prin proceduri de colectare automată (\textit{web scraping}) de pe platforma YouTube. Procesul a inclus agregarea a aproximativ 4800 de adrese URL pe baza unor interogări multilingve, urmată de o validare manuală riguroasă și segmentarea secvențelor de interes (utilizând editorul OpenShot). Rezultatul constă într-un set de 614 secvențe video validate, care acoperă o tipologie diversificată de incidente (graffiti, spargerea geamurilor, distrugerea autovehiculelor, efracție, vandalizarea mobilierului urban) (\S\ref{subsubsec:clasa_vandalism}, \S\ref{par:scraping_youtube}--\S\ref{par:set_final}).
 
-	\item[C21 --] \textbf{Antrenarea prin transfer de învățare a modelului SlowFast-R50 pentru recunoașterea acțiunilor.} Adaptarea rețelei SlowFast-R50 (pre-antrenată pe setul de date Kinetics-400) la specificul domeniului de supraveghere video, vizând trei clase țintă (\texttt{normal}, \texttt{fight}, \texttt{vandalism}). Modificarea arhitecturală a constat în înlocuirea stratului final de clasificare (\texttt{Linear(2304} $\rightarrow$ \texttt{3)}) și aplicarea unei strategii de antrenare în două etape: blocarea inițială a ponderilor rețelei de bază (\textit{backbone}), urmată de deblocarea acestora și antrenarea cu o rată de învățare diminuată. În urma acestui proces, modelul a atins o acuratețe de 94,33\% (\S\ref{subsec:pregatire_finetuning}, \S\ref{subsec:parametri_actiuni}, \S\ref{subsec:rezultate_actiuni}).
+	\item[C21 --] \textbf{Antrenarea prin transfer de învățare a modelului SlowFast-R50 pentru recunoașterea acțiunilor.} Adaptarea rețelei SlowFast-R50 (pre-antre-nată pe setul de date Kinetics-400) la specificul domeniului de supraveghere video, vizând trei clase țintă (\texttt{normal}, \texttt{fight}, \texttt{vandalism}). Modificarea arhitecturală a constat în înlocuirea stratului final de clasificare (\texttt{Linear(2304} $\rightarrow$ \texttt{3)}) și aplicarea unei strategii de antrenare în două etape: blocarea inițială a ponderilor rețelei de bază (\textit{backbone}), urmată de deblocarea acestora și antrenarea cu o rată de învățare diminuată. În urma acestui proces, modelul a atins o acuratețe de 94,33\% (\S\ref{subsec:pregatire_finetuning}, \S\ref{subsec:parametri_actiuni}, \S\ref{subsec:rezultate_actiuni}).
 \end{description}
 
 Spre deosebire de elementele menționate anterior, componentele preluate și utilizate în forma lor originală (modulul de recunoaștere facială \linebreak InsightFace, modelele pentru estimarea demografică, motorul EasyOCR, detectorul YOLOv10 pre-antrenat pentru foc/fum și rețeaua Mini-Xception pentru clasificarea emoțiilor) nu sunt revendicate drept contribuții originale la nivel de arhitectură neuronală. Contribuția personală se reflectă în modul de integrare și optimizare a acestora în cadrul sistemului, precum și în proiectarea algoritmilor de prelucrare, filtrare și decizie care le valorifică funcționalitățile, așa cum a fost prezentat în secțiunile precedente.
