@@ -380,7 +380,7 @@ Erorile rămase se împart în două categorii. O parte dintre clipurile pericul
 \section{Testarea sistemului integrat}
 \label{sec:eval_sistem}
 
-Secțiunile anterioare au evaluat performanța individuală a fiecărui model. Această secțiune testează \textbf{sistemul integrat end-to-end}, reproducând exact fluxul de producție. Clipurile video sunt injectate utilizând o sursă de tip „cameră de supraveghere” (prin endpoint-ul \inlinecode{POST /api/streams} cu parametrul \inlinecode{source="file"}) și sunt redate în \textbf{timp real} la frecvența nativă a cadrelor. Similar funcționării unei camere reale, cadrele care depășesc capacitatea de procesare a fluxului sunt omise. Datele vizuale sunt analizate \textit{simultan} de toate cele șase modele, rezultatele fiind ulterior stocate în baza de date PostgreSQL și transmise prin WebSocket. Un utilitar extern de testare a înregistrat în mod automat metricile provenite din interfața de stare, din fluxul WebSocket și din baza de date. Toate măsurătorile au fost efectuate utilizând o placă grafică \textbf{NVIDIA RTX~4060 (8~GB)}.
+Secțiunile anterioare au evaluat performanța individuală a fiecărui model. Aceas-tă secțiune testează \textbf{sistemul integrat end-to-end}, reproducând exact fluxul de producție. Clipurile video sunt injectate utilizând o sursă de tip „cameră de supraveghere” (prin endpoint-ul \inlinecode{POST /api/streams} cu parametrul \inlinecode{source=} \inlinecode{"file"}) și sunt redate în \textbf{timp real} la frecvența nativă a cadrelor. Similar funcționării unei camere reale, cadrele care depășesc capacitatea de procesare a fluxului sunt omise. Datele vizuale sunt analizate \textit{simultan} de toate cele șase modele, rezultatele fiind ulterior stocate în baza de date PostgreSQL și transmise prin WebSocket. Un utilitar extern de testare a înregistrat în mod automat metricile provenite din interfața de stare, din fluxul WebSocket și din baza de date. Toate măsurătorile au fost efectuate utilizând o placă grafică \textbf{NVIDIA RTX~4060 (8~GB)}.
 
 Evaluarea s-a desfășurat pe baza a două scenarii complementare: un \textbf{test secvențial}, menit să valideze corectitudinea funcțională, și un \textbf{test de stres}, conceput pentru a măsura comportamentul sistemului sub o încărcare concurentă maximă.
 
@@ -425,7 +425,8 @@ Latențele superioare înregistrate pentru detecția focului (1,9 secunde) și a
         \centering
         \caption{Debitul de procesare sub încărcare.}
         \label{tab:sistem_throughput}
-        \begin{tabular}{l r}
+        \setlength{\tabcolsep}{3pt}
+        \begin{tabular}{@{}l r@{}}
             \hline
             \textbf{Metrică} & \textbf{Valoare} \\
             \hline
@@ -442,7 +443,8 @@ Latențele superioare înregistrate pentru detecția focului (1,9 secunde) și a
         \centering
         \caption{Latența de inferență per model.}
         \label{tab:sistem_latenta}
-        \begin{tabular}{l r}
+        \setlength{\tabcolsep}{-12pt}
+        \begin{tabular}{@{}l r@{}}
             \hline
             \textbf{Detector} & \textbf{Latență (ms)} \\
             \hline
